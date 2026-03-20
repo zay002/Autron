@@ -108,8 +108,8 @@ export function CameraView() {
           {isMock && <span style={styles.mockBadge}>Mock</span>}
           <span style={{
             ...styles.statusDot,
-            backgroundColor: isConnected ? '#4ade80' : '#666',
-            boxShadow: isConnected ? '0 0 8px #4ade80' : 'none',
+            backgroundColor: isConnected ? '#4caf50' : '#ccc',
+            boxShadow: isConnected ? '0 0 8px #4caf50' : 'none',
           }} />
         </div>
       </div>
@@ -119,6 +119,7 @@ export function CameraView() {
           <div style={styles.disconnected}>
             <div style={styles.icon}>📷</div>
             <div style={styles.message}>Camera Disconnected</div>
+            {error && <div style={styles.errorMessage}>{error}</div>}
             <button onClick={connect} style={styles.connectButton}>
               Connect
             </button>
@@ -135,9 +136,8 @@ export function CameraView() {
             )}
           </>
         )}
-
-        {error && (
-          <div style={styles.error}>{error}</div>
+        {error && isConnected && (
+          <div style={styles.errorMessage}>{error}</div>
         )}
       </div>
 
@@ -169,9 +169,9 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    background: '#0f0f23',
+    background: '#fff',
     borderRadius: '8px',
-    border: '1px solid #1e3a5f',
+    border: '1px solid #e0e0e0',
     overflow: 'hidden',
   },
   header: {
@@ -179,13 +179,13 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '10px 12px',
-    borderBottom: '1px solid #1e3a5f',
-    background: '#16213e',
+    borderBottom: '1px solid #e0e0e0',
+    background: '#fafafa',
   },
   title: {
     fontSize: '13px',
     fontWeight: 600,
-    color: '#fff',
+    color: '#333',
   },
   headerRight: {
     display: 'flex',
@@ -195,9 +195,9 @@ const styles: Record<string, React.CSSProperties> = {
   mockBadge: {
     fontSize: '10px',
     padding: '2px 6px',
-    background: '#f59e0b',
+    background: '#fff3e0',
     borderRadius: '4px',
-    color: '#000',
+    color: '#ff6d00',
     fontWeight: 500,
   },
   statusDot: {
@@ -211,7 +211,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#0a0a15',
+    background: '#f5f5f5',
     position: 'relative',
   },
   disconnected: {
@@ -219,7 +219,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     gap: '12px',
-    color: '#888',
+    color: '#666',
   },
   icon: {
     fontSize: '48px',
@@ -227,15 +227,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
   message: {
     fontSize: '14px',
-    color: '#888',
+    color: '#666',
   },
   connectButton: {
     padding: '8px 24px',
-    background: '#3182ce',
+    background: '#ff6d00',
     border: 'none',
     borderRadius: '4px',
     color: '#fff',
     fontSize: '13px',
+    fontWeight: 500,
     cursor: 'pointer',
   },
   frame: {
@@ -248,13 +249,13 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     gap: '8px',
-    color: '#888',
+    color: '#666',
   },
   spinner: {
     width: '24px',
     height: '24px',
-    border: '2px solid #1e3a5f',
-    borderTopColor: '#60a5fa',
+    border: '2px solid #e0e0e0',
+    borderTopColor: '#ff6d00',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
   },
@@ -264,20 +265,32 @@ const styles: Record<string, React.CSSProperties> = {
     left: '8px',
     right: '8px',
     padding: '8px',
-    background: '#4a1f1f',
+    background: '#ffebee',
     borderRadius: '4px',
-    color: '#f87171',
+    color: '#d32f2f',
     fontSize: '12px',
+  },
+  errorMessage: {
+    position: 'absolute',
+    bottom: '8px',
+    left: '8px',
+    right: '8px',
+    padding: '8px',
+    background: '#ffebee',
+    borderRadius: '4px',
+    color: '#d32f2f',
+    fontSize: '12px',
+    textAlign: 'center',
   },
   footer: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '8px 12px',
-    borderTop: '1px solid #1e3a5f',
-    background: '#16213e',
+    borderTop: '1px solid #e0e0e0',
+    background: '#fafafa',
     fontSize: '11px',
-    color: '#888',
+    color: '#666',
   },
   info: {
     display: 'flex',
@@ -285,14 +298,14 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '6px',
   },
   separator: {
-    color: '#444',
+    color: '#ccc',
   },
   timestamp: {
-    color: '#666',
+    color: '#999',
   },
   disconnectButton: {
     padding: '4px 12px',
-    background: '#dc2626',
+    background: '#f44336',
     border: 'none',
     borderRadius: '4px',
     color: '#fff',

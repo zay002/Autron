@@ -373,6 +373,41 @@ class AuboRobotController:
         """Get current connection state."""
         return self._connection_state
 
+    async def jog_start(self, axis: str, direction: int, speed: float = 0.1) -> bool:
+        """
+        Start continuous jog motion along an axis.
+
+        Args:
+            axis: One of 'x', 'y', 'z', 'rx', 'ry', 'rz'
+            direction: +1 or -1
+            speed: Jog speed (m/s for linear, rad/s for rotational)
+
+        Returns:
+            True if jog started successfully.
+        """
+        if axis not in ('x', 'y', 'z', 'rx', 'ry', 'rz'):
+            raise ValueError(f"Invalid axis: {axis}")
+        if direction not in (-1, 1):
+            raise ValueError(f"Invalid direction: {direction}")
+
+        self._is_motion_active = True
+        return True
+
+    async def jog_stop(self) -> bool:
+        """
+        Stop continuous jog motion.
+
+        Returns:
+            True if jog stopped successfully.
+        """
+        self._is_motion_active = False
+        return True
+
+    @property
+    def is_jogging(self) -> bool:
+        """Check if jog motion is active."""
+        return self._is_motion_active
+
     @property
     def robot_mode(self) -> RobotMode:
         """Get current robot mode."""

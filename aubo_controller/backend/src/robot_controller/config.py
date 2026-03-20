@@ -21,6 +21,14 @@ class RobotConfig:
 
 
 @dataclass
+class CameraConfig:
+    """Camera connection configuration."""
+    camera_ip: str = "192.168.1.101"
+    camera_port: int = 8081
+    use_mock: bool = True
+
+
+@dataclass
 class MotionConfig:
     """Motion control configuration."""
     default_speed: float = 0.5
@@ -52,6 +60,7 @@ class AppConfig:
     cors_origins: list = field(default_factory=lambda: ["*"])
     log_level: str = "INFO"
     robot: RobotConfig = field(default_factory=RobotConfig)
+    camera: CameraConfig = field(default_factory=CameraConfig)
     motion: MotionConfig = field(default_factory=MotionConfig)
     simulator: SimulatorConfig = field(default_factory=SimulatorConfig)
 
@@ -81,6 +90,7 @@ def load_config() -> AppConfig:
                 api_port=data.get("api_port", 8000),
                 log_level=data.get("log_level", "INFO"),
                 robot=RobotConfig(**data.get("robot", {})),
+                camera=CameraConfig(**data.get("camera", {})),
                 motion=MotionConfig(**data.get("motion", {})),
                 simulator=SimulatorConfig(**data.get("simulator", {})),
             )
@@ -106,6 +116,11 @@ def save_config(config: AppConfig) -> bool:
                 "simulation": config.robot.simulation,
                 "connection_timeout": config.robot.connection_timeout,
                 "heartbeat_interval": config.robot.heartbeat_interval,
+            },
+            "camera": {
+                "camera_ip": config.camera.camera_ip,
+                "camera_port": config.camera.camera_port,
+                "use_mock": config.camera.use_mock,
             },
             "motion": {
                 "default_speed": config.motion.default_speed,
@@ -141,6 +156,9 @@ def update_config(
     simulation: Optional[bool] = None,
     connection_timeout: Optional[int] = None,
     heartbeat_interval: Optional[int] = None,
+    camera_ip: Optional[str] = None,
+    camera_port: Optional[int] = None,
+    use_mock: Optional[bool] = None,
     default_speed: Optional[float] = None,
     default_acceleration: Optional[float] = None,
     joint_velocity_limit: Optional[float] = None,
@@ -168,6 +186,14 @@ def update_config(
         config.robot.connection_timeout = connection_timeout
     if heartbeat_interval is not None:
         config.robot.heartbeat_interval = heartbeat_interval
+
+    # Camera settings
+    if camera_ip is not None:
+        config.camera.camera_ip = camera_ip
+    if camera_port is not None:
+        config.camera.camera_port = camera_port
+    if use_mock is not None:
+        config.camera.use_mock = use_mock
 
     # Motion settings
     if default_speed is not None:

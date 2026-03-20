@@ -34,17 +34,17 @@ function App() {
           <StatusIndicator
             label="Backend"
             active={backendConnected}
-            color="#4ade80"
+            color="#ff6d00"
           />
           <StatusIndicator
             label="Robot"
             active={connectionState === 'connected'}
-            color="#60a5fa"
+            color="#4caf50"
           />
           <StatusIndicator
             label="Simulation"
             active={connectionState === 'connected'}
-            color="#facc15"
+            color="#2196f3"
           />
         </div>
       </header>
@@ -85,11 +85,11 @@ function StatusIndicator({ label, active, color }: StatusIndicatorProps) {
       <div
         style={{
           ...styles.statusDot,
-          backgroundColor: active ? color : '#666',
+          backgroundColor: active ? color : '#ccc',
           boxShadow: active ? `0 0 8px ${color}` : 'none',
         }}
       />
-      <span>{label}</span>
+      <span style={styles.statusLabel}>{label}</span>
     </div>
   )
 }
@@ -99,20 +99,22 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     height: '100vh',
-    background: '#1a1a2e',
+    background: '#fff',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '12px 24px',
-    background: '#16213e',
-    borderBottom: '1px solid #0f3460',
+    background: '#fff',
+    borderBottom: '2px solid #ff6d00',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
   },
   title: {
-    fontSize: '18px',
-    fontWeight: 600,
-    color: '#fff',
+    fontSize: '20px',
+    fontWeight: 700,
+    color: '#333',
+    margin: 0,
   },
   statusBar: {
     display: 'flex',
@@ -123,8 +125,11 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
+  },
+  statusLabel: {
     fontSize: '13px',
-    color: '#aaa',
+    color: '#666',
+    fontWeight: 500,
   },
   statusDot: {
     width: '10px',
@@ -143,7 +148,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: '4px',
     padding: '4px',
-    background: '#0f0f23',
+    background: '#f5f5f5',
   },
   cameraPanel: {
     flex: 1,
@@ -158,14 +163,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
   divider: {
     width: '4px',
-    background: '#0f3460',
+    background: '#e0e0e0',
   },
   controlPanel: {
     flex: 0.8,
     display: 'flex',
     flexDirection: 'column',
-    background: '#16213e',
+    background: '#fff',
     overflow: 'auto',
+    borderLeft: '1px solid #e0e0e0',
   },
 }
 

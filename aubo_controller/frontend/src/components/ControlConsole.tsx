@@ -20,6 +20,8 @@ export function ControlConsole() {
     disconnect,
     testConnection,
     moveJoints,
+    jogStart,
+    jogStop,
     loadConfig,
     updateConfig,
   } = useRobotStore()
@@ -74,6 +76,14 @@ export function ControlConsole() {
     addLog(`Moving to: ${targetPositions.map((p) => p.toFixed(1)).join(', ')}°`)
   }
 
+  const handleJogStart = async (axis: string, direction: number) => {
+    await jogStart(axis, direction)
+  }
+
+  const handleJogStop = async () => {
+    await jogStop()
+  }
+
   const handleSliderChange = (index: number, value: number) => {
     const newPositions = [...targetPositions]
     newPositions[index] = value
@@ -122,6 +132,11 @@ export function ControlConsole() {
               setTargetPositions(positions)
               addLog(`Selected ${name} position`)
             }}
+            onJogStart={(axis, direction) => {
+              handleJogStart(axis, direction)
+              addLog(`Jog ${axis}${direction > 0 ? '+' : '-'}`)
+            }}
+            onJogStop={() => handleJogStop()}
           />
         )}
 
@@ -158,6 +173,8 @@ interface ControlTabProps {
   onSliderChange: (index: number, value: number) => void
   onSpeedChange: (speed: number) => void
   onQuickPosition: (name: string, positions: number[]) => void
+  onJogStart: (axis: string, direction: number) => void
+  onJogStop: () => void
 }
 
 function ControlTab({
@@ -176,6 +193,8 @@ function ControlTab({
   onSliderChange,
   onSpeedChange,
   onQuickPosition,
+  onJogStart,
+  onJogStop,
 }: ControlTabProps) {
   return (
     <div style={styles.scrollContent}>
@@ -309,6 +328,43 @@ function ControlTab({
         </div>
       </Panel>
 
+      {/* Cartesian Jog */}
+      <Panel title="Cartesian Jog">
+        <div style={styles.jogPanel}>
+          {[
+            { axis: 'x', label: 'X', unit: 'm' },
+            { axis: 'y', label: 'Y', unit: 'm' },
+            { axis: 'z', label: 'Z', unit: 'm' },
+            { axis: 'rx', label: 'RX', unit: 'rad' },
+            { axis: 'ry', label: 'RY', unit: 'rad' },
+            { axis: 'rz', label: 'RZ', unit: 'rad' },
+          ].map(({ axis, label, unit }) => (
+            <div key={axis} style={styles.jogRow}>
+              <span style={styles.jogLabel}>{label}</span>
+              <button
+                onMouseDown={() => onJogStart(axis, -1)}
+                onMouseUp={onJogStop}
+                onMouseLeave={onJogStop}
+                disabled={!isConnected}
+                style={styles.jogButton}
+              >
+                -
+              </button>
+              <span style={styles.jogUnit}>{unit}</span>
+              <button
+                onMouseDown={() => onJogStart(axis, 1)}
+                onMouseUp={onJogStop}
+                onMouseLeave={onJogStop}
+                disabled={!isConnected}
+                style={styles.jogButton}
+              >
+                +
+              </button>
+            </div>
+          ))}
+        </div>
+      </Panel>
+
       {/* Robot State */}
       <Panel title="Robot State">
         <div style={styles.stateGrid}>
@@ -387,6 +443,55 @@ function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigT
               }
             />
             <span>Simulation Mode</span>
+          </label>
+        </div>
+      </Panel>
+
+      {/* Camera Settings */}
+      <Panel title="Camera Settings">
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Camera IP</label>
+          <input
+            type="text"
+            value={localConfig.camera?.camera_ip || '192.168.1.101'}
+            onChange={(e) =>
+              setLocalConfig({
+                ...localConfig,
+                camera: { ...localConfig.camera, camera_ip: e.target.value },
+              })
+            }
+            style={styles.input}
+          />
+        </div>
+
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Camera Port</label>
+          <input
+            type="number"
+            value={localConfig.camera?.camera_port || 8081}
+            onChange={(e) =>
+              setLocalConfig({
+                ...localConfig,
+                camera: { ...localConfig.camera, camera_port: parseInt(e.target.value) },
+              })
+            }
+            style={styles.input}
+          />
+        </div>
+
+        <div style={styles.formGroup}>
+          <label style={styles.checkboxLabel}>
+            <input
+              type="checkbox"
+              checked={localConfig.camera?.use_mock ?? true}
+              onChange={(e) =>
+                setLocalConfig({
+                  ...localConfig,
+                  camera: { ...localConfig.camera, use_mock: e.target.checked },
+                })
+              }
+            />
+            <span>Use Mock Camera</span>
           </label>
         </div>
       </Panel>
@@ -560,8 +665,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   tabBar: {
     display: 'flex',
-    background: '#0f0f23',
-    borderBottom: '1px solid #1e3a5f',
+    background: '#fafafa',
+    borderBottom: '2px solid #e0e0e0',
   },
   tab: {
     flex: 1,
@@ -569,15 +674,15 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'transparent',
     border: 'none',
     borderBottom: '2px solid transparent',
-    color: '#888',
+    color: '#666',
     fontSize: '13px',
     fontWeight: 500,
     cursor: 'pointer',
     transition: 'all 0.2s',
   },
   tabActive: {
-    color: '#60a5fa',
-    borderBottomColor: '#60a5fa',
+    color: '#ff6d00',
+    borderBottomColor: '#ff6d00',
   },
   content: {
     flex: 1,
@@ -589,17 +694,17 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
   },
   panel: {
-    background: '#0f0f23',
+    background: '#fff',
     borderRadius: '8px',
-    border: '1px solid #1e3a5f',
+    border: '1px solid #e0e0e0',
     marginBottom: '12px',
   },
   panelTitle: {
     fontSize: '12px',
     fontWeight: 600,
-    color: '#60a5fa',
+    color: '#ff6d00',
     padding: '10px 12px',
-    borderBottom: '1px solid #1e3a5f',
+    borderBottom: '1px solid #e0e0e0',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
   },
@@ -613,15 +718,15 @@ const styles: Record<string, React.CSSProperties> = {
   input: {
     flex: 1,
     padding: '8px 12px',
-    background: '#16213e',
-    border: '1px solid #1e3a5f',
+    background: '#fafafa',
+    border: '1px solid #e0e0e0',
     borderRadius: '4px',
-    color: '#fff',
+    color: '#333',
     fontSize: '13px',
   },
   testButton: {
     padding: '8px 16px',
-    background: '#4a5568',
+    background: '#666',
     border: 'none',
     borderRadius: '4px',
     color: '#fff',
@@ -648,7 +753,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   button: {
     padding: '10px 16px',
-    background: '#3182ce',
+    background: '#ff6d00',
     border: 'none',
     borderRadius: '4px',
     color: '#fff',
@@ -663,10 +768,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
   },
   statusLabel: {
-    color: '#888',
+    color: '#666',
   },
   statusValue: {
     fontWeight: 500,
+    color: '#333',
   },
   jointGrid: {
     display: 'grid',
@@ -674,9 +780,10 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '12px',
   },
   jointControl: {
-    background: '#16213e',
+    background: '#fafafa',
     padding: '8px',
     borderRadius: '4px',
+    border: '1px solid #e0e0e0',
   },
   jointHeader: {
     display: 'flex',
@@ -685,18 +792,18 @@ const styles: Record<string, React.CSSProperties> = {
   },
   jointName: {
     fontSize: '12px',
-    color: '#888',
+    color: '#666',
   },
   jointValue: {
     fontSize: '12px',
-    color: '#facc15',
+    color: '#ff6d00',
     fontFamily: 'monospace',
   },
   slider: {
     width: '100%',
     height: '6px',
     appearance: 'none',
-    background: '#1e3a5f',
+    background: '#e0e0e0',
     borderRadius: '3px',
     cursor: 'pointer',
   },
@@ -706,7 +813,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: '4px',
     fontSize: '12px',
-    color: '#888',
+    color: '#666',
   },
   quickButtons: {
     display: 'flex',
@@ -715,12 +822,45 @@ const styles: Record<string, React.CSSProperties> = {
   quickButton: {
     flex: 1,
     padding: '8px',
-    background: '#16213e',
-    border: '1px solid #1e3a5f',
+    background: '#fafafa',
+    border: '1px solid #e0e0e0',
     borderRadius: '4px',
-    color: '#fff',
+    color: '#333',
     fontSize: '12px',
     cursor: 'pointer',
+  },
+  jogPanel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  jogRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  jogLabel: {
+    width: '32px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#ff6d00',
+  },
+  jogButton: {
+    width: '36px',
+    height: '28px',
+    background: '#fafafa',
+    border: '1px solid #e0e0e0',
+    borderRadius: '4px',
+    color: '#333',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+  },
+  jogUnit: {
+    width: '36px',
+    fontSize: '10px',
+    color: '#888',
+    textAlign: 'center',
   },
   stateGrid: {
     display: 'grid',
@@ -729,10 +869,11 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '8px',
   },
   stateItem: {
-    background: '#16213e',
+    background: '#fafafa',
     padding: '8px',
     borderRadius: '4px',
     textAlign: 'center',
+    border: '1px solid #e0e0e0',
   },
   stateLabel: {
     display: 'block',
@@ -742,7 +883,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   stateValue: {
     fontSize: '14px',
-    color: '#fff',
+    color: '#333',
     fontFamily: 'monospace',
   },
   stateUnit: {
@@ -756,7 +897,7 @@ const styles: Record<string, React.CSSProperties> = {
   label: {
     display: 'block',
     fontSize: '12px',
-    color: '#888',
+    color: '#666',
     marginBottom: '4px',
   },
   checkboxLabel: {
@@ -764,13 +905,13 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '8px',
     fontSize: '13px',
-    color: '#fff',
+    color: '#333',
     cursor: 'pointer',
   },
   saveButton: {
     width: '100%',
     padding: '12px',
-    background: '#38a169',
+    background: '#ff6d00',
     border: 'none',
     borderRadius: '4px',
     color: '#fff',
@@ -784,16 +925,17 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '12px',
   },
   console: {
-    background: '#0a0a15',
+    background: '#fafafa',
     padding: '12px',
     borderRadius: '4px',
+    border: '1px solid #e0e0e0',
     height: '100%',
     overflow: 'auto',
     fontFamily: 'monospace',
     fontSize: '12px',
   },
   logLine: {
-    color: '#4ade80',
+    color: '#333',
     marginBottom: '4px',
   },
 }

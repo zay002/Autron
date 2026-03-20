@@ -8,6 +8,12 @@ interface RobotConfig {
   heartbeat_interval: number
 }
 
+interface CameraConfig {
+  camera_ip: string
+  camera_port: number
+  use_mock: boolean
+}
+
 interface MotionConfig {
   default_speed: number
   default_acceleration: number
@@ -29,6 +35,7 @@ interface SimulatorConfig {
 
 interface AppConfig {
   robot: RobotConfig
+  camera: CameraConfig
   motion: MotionConfig
   simulator: SimulatorConfig
 }
@@ -62,6 +69,8 @@ interface RobotState {
   testConnection: (robotIp: string, timeout?: number) => Promise<void>
   moveJoints: (positions: number[], speed?: number) => Promise<void>
   moveCartesian: (position: number[], orientation: number[]) => Promise<void>
+  jogStart: (axis: string, direction: number) => Promise<void>
+  jogStop: () => Promise<void>
   getState: () => Promise<void>
   setJointPositions: (positions: number[]) => void
   loadConfig: () => Promise<void>
@@ -86,6 +95,11 @@ export const useRobotStore = create<RobotState>((set, get) => ({
       simulation: true,
       connection_timeout: 10,
       heartbeat_interval: 1,
+    },
+    camera: {
+      camera_ip: '192.168.1.101',
+      camera_port: 8081,
+      use_mock: true,
     },
     motion: {
       default_speed: 0.5,
@@ -130,6 +144,21 @@ export const useRobotStore = create<RobotState>((set, get) => ({
           connectionState: 'connected',
           simulation,
         })
+        // Sync to initial state from robot (real robot) or home (simulation)
+        if (data.initial_state) {
+          set({
+            jointPositions: data.initial_state.joint_positions || DEFAULT_JOINT_POSITIONS,
+            endEffectorPosition: data.initial_state.end_effector_position || [0, 0, 0],
+            endEffectorOrientation: data.initial_state.end_effector_orientation || [1, 0, 0, 0],
+          })
+        } else {
+          // Simulation mode - use default home position
+          set({
+            jointPositions: DEFAULT_JOINT_POSITIONS,
+            endEffectorPosition: [0, 0, 0],
+            endEffectorOrientation: [1, 0, 0, 0],
+          })
+        }
       } else {
         set({ connectionState: 'error' })
       }
@@ -221,6 +250,29 @@ export const useRobotStore = create<RobotState>((set, get) => ({
     }
   },
 
+  jogStart: async (axis: string, direction: number) => {
+    const { connectionState } = get()
+    if (connectionState !== 'connected') return
+
+    try {
+      await fetch('/api/move/jog/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ axis, direction, speed: 0.05 }),
+      })
+    } catch (error) {
+      console.error('Jog start failed:', error)
+    }
+  },
+
+  jogStop: async () => {
+    try {
+      await fetch('/api/move/jog/stop', { method: 'POST' })
+    } catch (error) {
+      console.error('Jog stop failed:', error)
+    }
+  },
+
   getState: async () => {
     try {
       const response = await fetch('/api/state')
@@ -267,6 +319,12 @@ export const useRobotStore = create<RobotState>((set, get) => ({
         if (updates.robot.simulation !== undefined) flatUpdates.simulation = updates.robot.simulation
         if (updates.robot.connection_timeout !== undefined) flatUpdates.connection_timeout = updates.robot.connection_timeout
         if (updates.robot.heartbeat_interval !== undefined) flatUpdates.heartbeat_interval = updates.robot.heartbeat_interval
+      }
+
+      if (updates.camera) {
+        if (updates.camera.camera_ip !== undefined) flatUpdates.camera_ip = updates.camera.camera_ip
+        if (updates.camera.camera_port !== undefined) flatUpdates.camera_port = updates.camera.camera_port
+        if (updates.camera.use_mock !== undefined) flatUpdates.use_mock = updates.camera.use_mock
       }
 
       if (updates.motion) {

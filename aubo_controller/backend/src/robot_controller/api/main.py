@@ -10,6 +10,7 @@ import asyncio
 import socket
 from contextlib import asynccontextmanager
 from typing import List, Optional
+import numpy as np
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -80,6 +81,10 @@ class ConfigUpdateRequest(BaseModel):
     simulation: Optional[bool] = None
     connection_timeout: Optional[int] = None
     heartbeat_interval: Optional[int] = None
+    # Camera settings
+    camera_ip: Optional[str] = None
+    camera_port: Optional[int] = None
+    use_mock: Optional[bool] = None
     # Motion settings
     default_speed: Optional[float] = None
     default_acceleration: Optional[float] = None
@@ -126,7 +131,7 @@ async def lifespan(app: FastAPI):
         solver_iterations=config.simulator.solver_iterations,
     )
     simulator.reset()  # Initialize to home position
-    camera_service = create_camera_service(use_mock=True)
+    camera_service = create_camera_service(use_mock=config.camera.use_mock)
 
     print("=" * 50)
     print("Aubo Controller API started")
@@ -224,6 +229,11 @@ async def get_configuration():
             "connection_timeout": config.robot.connection_timeout,
             "heartbeat_interval": config.robot.heartbeat_interval,
         },
+        "camera": {
+            "camera_ip": config.camera.camera_ip,
+            "camera_port": config.camera.camera_port,
+            "use_mock": config.camera.use_mock,
+        },
         "motion": {
             "default_speed": config.motion.default_speed,
             "default_acceleration": config.motion.default_acceleration,
@@ -253,6 +263,9 @@ async def update_configuration(request: ConfigUpdateRequest):
         simulation=request.simulation,
         connection_timeout=request.connection_timeout,
         heartbeat_interval=request.heartbeat_interval,
+        camera_ip=request.camera_ip,
+        camera_port=request.camera_port,
+        use_mock=request.use_mock,
         default_speed=request.default_speed,
         default_acceleration=request.default_acceleration,
         joint_velocity_limit=request.joint_velocity_limit,
@@ -275,7 +288,7 @@ async def update_configuration(request: ConfigUpdateRequest):
 @app.post("/connect")
 async def connect_robot(request: ConnectionRequest):
     """Connect to robot or start simulation."""
-    global controller
+    global controller, simulator
 
     controller = create_controller(
         robot_ip=request.robot_ip,
@@ -285,12 +298,34 @@ async def connect_robot(request: ConnectionRequest):
 
     success = await controller.connect()
 
+    # If connecting to real robot (not simulation), read live state first
+    # to initialize simulator and UI from actual hardware state
+    initial_state = None
+    if success and not request.simulation:
+        try:
+            state = await controller.get_state()
+            initial_state = {
+                "joint_positions": state.joint_positions,
+                "end_effector_position": state.end_effector_position,
+                "end_effector_orientation": state.end_effector_orientation,
+            }
+            # Sync simulator to match real robot state
+            if simulator and initial_state:
+                simulator.set_joint_positions(np.array(initial_state["joint_positions"]))
+        except Exception as e:
+            print(f"Warning: Could not read initial robot state: {e}")
+
+    # For simulation mode, also sync simulator to home/home position
+    if success and request.simulation and simulator:
+        simulator.reset()
+
     return {
         "success": success,
         "simulation": request.simulation,
         "robot_ip": request.robot_ip,
         "robot_port": request.robot_port,
         "connection_state": controller.connection_state.value,
+        "initial_state": initial_state,
     }
 
 
@@ -411,6 +446,32 @@ async def move_cartesian(command: CartesianCommand):
     return {"success": success}
 
 
+class JogRequest(BaseModel):
+    axis: str  # 'x', 'y', 'z', 'rx', 'ry', 'rz'
+    direction: int  # +1 or -1
+    speed: float = 0.05
+
+
+@app.post("/move/jog/start")
+async def jog_start(request: JogRequest):
+    """Start continuous jog motion along an axis."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Controller not initialized")
+
+    success = await controller.jog_start(request.axis, request.direction, request.speed)
+    return {"success": success}
+
+
+@app.post("/move/jog/stop")
+async def jog_stop():
+    """Stop continuous jog motion."""
+    if not controller:
+        raise HTTPException(status_code=503, detail="Controller not initialized")
+
+    success = await controller.jog_stop()
+    return {"success": success}
+
+
 # ==================== Mode Endpoints ====================
 
 @app.post("/mode/teach")
@@ -497,6 +558,30 @@ async def step_simulator():
 
     simulator.step()
     return {"success": True, "time": simulator.data.time}
+
+
+@app.get("/simulator/render")
+async def render_simulator(width: int = 640, height: int = 480):
+    """
+    Get a rendered image of the current simulator state.
+
+    Returns a PNG image of the MuJoCo-rendered robot.
+    """
+    if not simulator:
+        raise HTTPException(status_code=503, detail="Simulator not initialized")
+
+    try:
+        image_bytes = simulator.render_image(width=width, height=height)
+        import base64
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        return {
+            "success": True,
+            "image": f"data:image/png;base64,{image_base64}",
+            "width": width,
+            "height": height,
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 # ==================== Camera Endpoints ====================
