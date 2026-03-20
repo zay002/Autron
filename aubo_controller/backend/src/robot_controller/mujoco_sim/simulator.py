@@ -235,7 +235,20 @@ class AuboSimulator:
 
     def get_end_effector_position(self) -> np.ndarray:
         """Get end effector position in world coordinates."""
-        return self.data.site_xpos[self.data.site("ee_site")].copy()
+        try:
+            # Try to use ee_site if it exists
+            site_id = self.data.site("ee_site")
+            return self.data.site_xpos[site_id].copy()
+        except Exception:
+            # Fall back to wrist3 body position
+            try:
+                body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "wrist3_link")
+                if body_id >= 0:
+                    return self.data.xpos[body_id].copy()
+            except Exception:
+                pass
+            # Last resort: use last body position
+            return self.data.xpos[-1].copy()
 
     def get_end_effector_orientation(self) -> np.ndarray:
         """
@@ -244,9 +257,22 @@ class AuboSimulator:
         Returns:
             4-element array representing quaternion [w, x, y, z].
         """
-        # Convert rotation matrix to quaternion
-        rot_mat = self.data.site_xmat[self.data.site("ee_site")].reshape(3, 3)
-        return self._rotation_matrix_to_quaternion(rot_mat)
+        try:
+            # Try to use ee_site if it exists
+            site_id = self.data.site("ee_site")
+            rot_mat = self.data.site_xmat[site_id].reshape(3, 3)
+            return self._rotation_matrix_to_quaternion(rot_mat)
+        except Exception:
+            # Fall back to wrist3 body orientation
+            try:
+                body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "wrist3_link")
+                if body_id >= 0:
+                    rot_mat = self.data.xmat[body_id].reshape(3, 3)
+                    return self._rotation_matrix_to_quaternion(rot_mat)
+            except Exception:
+                pass
+            # Last resort: identity quaternion
+            return np.array([1.0, 0.0, 0.0, 0.0])
 
     def _rotation_matrix_to_quaternion(self, R: np.ndarray) -> np.ndarray:
         """Convert 3x3 rotation matrix to quaternion [w, x, y, z]."""
