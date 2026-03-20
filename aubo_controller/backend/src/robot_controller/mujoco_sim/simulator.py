@@ -7,6 +7,8 @@ It can load the robot URDF and simulate joint movements.
 
 from __future__ import annotations
 
+import os
+import re
 import numpy as np
 from typing import Optional
 import mujoco
@@ -14,24 +16,24 @@ import mujoco.viewer
 
 
 # Robot joint configuration for Aubo i5
-# 6 joints: shoulder, upper_arm, forearm, wrist1, wrist2, wrist3
+# 6 joints matching the real URDF joint names
 AUBO_I5_JOINT_NAMES = [
-    "joint1",  # shoulder
-    "joint2",  # upper arm
-    "joint3",  # forearm
-    "joint4",  # wrist 1
-    "joint5",  # wrist 2
-    "joint6",  # wrist 3
+    "shoulder_joint",
+    "upperArm_joint",
+    "foreArm_joint",
+    "wrist1_joint",
+    "wrist2_joint",
+    "wrist3_joint",
 ]
 
 # Joint angle limits (radians)
 AUBO_I5_JOINT_LIMITS = {
-    "joint1": (-np.pi, np.pi),       # ±360°
-    "joint2": (-np.pi / 2, np.pi / 2),  # ±90°
-    "joint3": (-np.pi, np.pi),       # ±180°
-    "joint4": (-np.pi, np.pi),       # ±180°
-    "joint5": (-np.pi / 2, np.pi / 2),  # ±90°
-    "joint6": (-np.pi, np.pi),       # ±360°
+    "shoulder_joint": (-np.pi, np.pi),       # ±360°
+    "upperArm_joint": (-np.pi / 2, np.pi / 2),  # ±90°
+    "foreArm_joint": (-np.pi, np.pi),       # ±180°
+    "wrist1_joint": (-np.pi, np.pi),       # ±180°
+    "wrist2_joint": (-np.pi / 2, np.pi / 2),  # ±90°
+    "wrist3_joint": (-np.pi, np.pi),       # ±360°
 }
 
 
@@ -69,29 +71,20 @@ class AuboSimulator:
         self.gravity = gravity
         self.solver_iterations = solver_iterations
 
-        # Determine model path - try to use Aubo i5 URDF from aubo_description
+        # Determine model path - use local MuJoCo-ready model by default
         if model_path is None:
-            # Try to find aubo_description package
-            possible_paths = [
-                # From aubo_controller root
-                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "..", "aubo_description-main", "urdf", "aubo_i5.urdf"),
-                # From project root
-                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "aubo_description-main", "urdf", "aubo_i5.urdf"),
-            ]
-            model_path = None
-            for p in possible_paths:
-                if os.path.exists(p):
-                    model_path = p
-                    break
-
-            if model_path is None:
-                print("WARNING: Aubo i5 URDF not found, using simplified arm model")
-                self.model = self._create_simple_arm_model()
-            else:
+            # Use the prepared MuJoCo-ready model in the local models directory
+            # This avoids ROS package:// path resolution issues
+            local_model = os.path.join(os.path.dirname(__file__), "models", "aubo_i5_mujoco", "aubo_i5.urdf")
+            if os.path.exists(local_model):
+                model_path = local_model
                 print(f"Loading Aubo i5 model from: {model_path}")
-                self.model = mujoco.MjModel.from_xml_path(model_path)
+                self.model = self._load_model_with_meshes(model_path)
+            else:
+                print("WARNING: Aubo i5 MuJoCo model not found, using simplified arm model")
+                self.model = self._create_simple_arm_model()
         else:
-            self.model = mujoco.MjModel.from_xml_path(model_path)
+            self.model = self._load_model_with_meshes(model_path)
 
         # Apply physics configuration
         self.model.opt.timestep = timestep
@@ -105,6 +98,26 @@ class AuboSimulator:
 
         # Initialize to home position
         self.home_position = np.array([0.0, -0.785, 1.571, 0.0, 1.571, 0.0])  # radians
+
+    def _load_model_with_meshes(self, model_path: str) -> mujoco.MjModel:
+        """
+        Load Mujoco model from local URDF with mesh files at same directory level.
+
+        This expects the prepared MuJoCo-ready model where STL files are
+        placed in the same directory as the URDF (flattened structure).
+        """
+        # Save current directory
+        original_dir = os.getcwd()
+
+        # Change to the URDF directory so relative paths resolve
+        urdf_dir = os.path.dirname(os.path.abspath(model_path))
+        os.chdir(urdf_dir)
+
+        try:
+            return mujoco.MjModel.from_xml_path(model_path)
+        finally:
+            # Restore original directory
+            os.chdir(original_dir)
 
     def _create_simple_arm_model(self) -> mujoco.MjModel:
         """Create a simple 6-DOF arm model for testing."""
