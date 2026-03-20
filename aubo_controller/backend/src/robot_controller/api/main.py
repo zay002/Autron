@@ -24,6 +24,7 @@ from robot_controller.robot_controller import (
     create_controller,
 )
 from robot_controller.mujoco_sim.simulator import AuboSimulator, create_simulator
+from robot_controller.camera_service import CameraService, create_camera_service
 from robot_controller.config import (
     get_config,
     save_config,
@@ -38,6 +39,10 @@ from robot_controller.config import (
 # Global instances
 controller: Optional[AuboRobotController] = None
 simulator: Optional[AuboSimulator] = None
+camera_service: Optional[CameraService] = None
+
+
+# Pydantic models for API
 
 
 # Pydantic models for API
@@ -104,7 +109,7 @@ class SimulatorConfigRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
-    global controller, simulator
+    global controller, simulator, camera_service
 
     config = get_config()
     controller = create_controller(
@@ -120,6 +125,7 @@ async def lifespan(app: FastAPI):
         gravity=config.simulator.gravity,
         solver_iterations=config.simulator.solver_iterations,
     )
+    camera_service = create_camera_service(use_mock=True)
 
     print("=" * 50)
     print("Aubo Controller API started")
@@ -490,6 +496,65 @@ async def step_simulator():
 
     simulator.step()
     return {"success": True, "time": simulator.data.time}
+
+
+# ==================== Camera Endpoints ====================
+
+@app.get("/camera/status")
+async def get_camera_status():
+    """Get camera status."""
+    if not camera_service:
+        raise HTTPException(status_code=503, detail="Camera service not initialized")
+
+    return camera_service.get_status()
+
+
+@app.post("/camera/connect")
+async def connect_camera():
+    """Connect to camera."""
+    if not camera_service:
+        raise HTTPException(status_code=503, detail="Camera service not initialized")
+
+    result = camera_service.connect()
+    return result
+
+
+@app.post("/camera/disconnect")
+async def disconnect_camera():
+    """Disconnect from camera."""
+    if not camera_service:
+        raise HTTPException(status_code=503, detail="Camera service not initialized")
+
+    result = camera_service.disconnect()
+    return result
+
+
+@app.get("/camera/frame")
+async def get_camera_frame():
+    """
+    Get a single frame from the camera.
+
+    Returns a JPEG image encoded as base64.
+    If camera is not connected, returns None.
+    """
+    if not camera_service:
+        raise HTTPException(status_code=503, detail="Camera service not initialized")
+
+    if not camera_service.is_connected:
+        return {"success": False, "message": "Camera not connected"}
+
+    frame_data = camera_service.get_frame()
+    if frame_data is None:
+        return {"success": False, "message": "Failed to get frame"}
+
+    return {
+        "success": True,
+        "timestamp": frame_data["timestamp"],
+        "width": frame_data["width"],
+        "height": frame_data["height"],
+        "frame": frame_data["frame"],
+        "is_mock": frame_data["is_mock"],
+    }
 
 
 # ==================== WebSocket Endpoint ====================

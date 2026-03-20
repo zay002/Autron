@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { SimulationView } from './components/SimulationView'
+import { CameraView } from './components/CameraView'
 import { ControlConsole } from './components/ControlConsole'
 import { useRobotStore } from './store/robotStore'
 
 function App() {
-  const { connectionState, connect, disconnect, getState } = useRobotStore()
+  const { connectionState, getState } = useRobotStore()
   const [backendConnected, setBackendConnected] = useState(false)
 
   useEffect(() => {
@@ -50,9 +51,14 @@ function App() {
 
       {/* Main Content */}
       <main style={styles.main}>
-        {/* Left Panel: Simulation */}
-        <div style={styles.simulationPanel}>
-          <SimulationView />
+        {/* Left Panel: Camera + Simulation (stacked vertically) */}
+        <div style={styles.leftPanel}>
+          <div style={styles.cameraPanel}>
+            <CameraView />
+          </div>
+          <div style={styles.simulationPanel}>
+            <SimulationView />
+          </div>
         </div>
 
         {/* Divider */}
@@ -131,11 +137,24 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     overflow: 'hidden',
   },
+  leftPanel: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    padding: '4px',
+    background: '#0f0f23',
+  },
+  cameraPanel: {
+    flex: 1,
+    minHeight: '200px',
+    display: 'flex',
+    flexDirection: 'column',
+  },
   simulationPanel: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    background: '#0f0f23',
   },
   divider: {
     width: '4px',

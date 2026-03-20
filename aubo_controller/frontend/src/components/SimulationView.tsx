@@ -1,7 +1,6 @@
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Grid, Environment } from '@react-three/drei'
 import { useRobotStore } from '../store/robotStore'
-import * as THREE from 'three'
 
 // Robot link colors
 const LINK_COLORS = {
@@ -105,31 +104,6 @@ function RobotArm() {
           </group>
         </group>
       </group>
-    </group>
-  )
-}
-
-function JointIndicator({
-  position,
-  angle,
-  index,
-}: {
-  position: [number, number, number]
-  angle: number
-  index: number
-}) {
-  return (
-    <group position={position}>
-      {/* Joint sphere */}
-      <mesh>
-        <sphereGeometry args={[0.03, 16, 16]} />
-        <meshStandardMaterial color="#facc15" />
-      </mesh>
-      {/* Angle label */}
-      <mesh position={[0.08, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <planeGeometry args={[0.06, 0.03]} />
-        <meshBasicMaterial color="#facc15" transparent opacity={0.8} />
-      </mesh>
     </group>
   )
 }
