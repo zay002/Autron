@@ -1,0 +1,30 @@
+[project]
+name = "aubo-controller"
+version = "0.1.0"
+description = "Aubo i5 Robot Controller with Mujoco simulation"
+requires-python = ">=3.6,<3.12"
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "websockets>=12.0",
+    "numpy>=1.26.0",
+    "mujoco>=3.1.0",
+    "mujoco-python>=3.1.0",
+    "pydantic>=2.5.0",
+    "python-multipart>=0.0.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

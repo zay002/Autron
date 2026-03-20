@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Backend
+backend/src/robot_controller/__pycache__/
+*.pyc
+
+# Frontend
+node_modules/
+frontend/node_modules/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Mujoco
+.mujoco/
+
+# Config with credentials
+backend/src/robot_controller/config.json
