@@ -1,0 +1,85 @@
+INFO:     Started server process [31240]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18080 (Press CTRL+C to quit)
+Loading Aubo i5 model from: D:\Autron\aubo_controller\backend\src\robot_controller\mujoco_sim\models\aubo_i5_mujoco\aubo_i5.urdf
+==================================================
+Aubo Controller API started
+  Mode: Simulation
+  Robot IP: 192.168.1.200:9090
+  Collision Detection: True
+  API Server: http://0.0.0.0:8000
+==================================================
+INFO:     127.0.0.1:13118 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13121 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13122 - "GET /camera/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13123 - "POST /connect HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13127 - "GET /state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13128 - "POST /move/joints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13129 - "GET /state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13130 - "GET /simulator/state HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\fastapi\applications.py", line 1160, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\starlette\applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 87, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\fastapi\routing.py", line 130, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\fastapi\routing.py", line 116, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\fastapi\routing.py", line 670, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Autron\aubo_controller\backend\.venv\Lib\site-packages\fastapi\routing.py", line 324, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Autron\aubo_controller\backend\src\robot_controller\api\main.py", line 488, in get_simulator_state
+    return simulator.get_observation()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Autron\aubo_controller\backend\src\robot_controller\mujoco_sim\simulator.py", line 329, in get_observation
+    "end_effector_position": self.get_end_effector_position().tolist(),
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Autron\aubo_controller\backend\src\robot_controller\mujoco_sim\simulator.py", line 238, in get_end_effector_position
+    return self.data.site_xpos[self.data.site("ee_site")].copy()
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: "Invalid name 'ee_site'. Valid names: []"
+INFO:     127.0.0.1:13131 - "POST /mode/playback HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13132 - "GET /state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13133 - "POST /move/cartesian HTTP/1.1" 200 OK
+EMERGENCY STOP ACTIVATED
+INFO:     127.0.0.1:13134 - "POST /stop HTTP/1.1" 200 OK
+ERROR: Motion rejected - emergency stop is active
+INFO:     127.0.0.1:13135 - "POST /move/joints HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13136 - "POST /disconnect HTTP/1.1" 200 OK

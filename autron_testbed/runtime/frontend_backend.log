@@ -1,0 +1,15 @@
+INFO:     Started server process [34552]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    [Errno 13] error while attempting to bind on address ('127.0.0.1', 8000): 以一种访问权限不允许的方式做了一个访问套接字的尝试。
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+Loading Aubo i5 model from: D:\Autron\aubo_controller\backend\src\robot_controller\mujoco_sim\models\aubo_i5_mujoco\aubo_i5.urdf
+==================================================
+Aubo Controller API started
+  Mode: Simulation
+  Robot IP: 192.168.1.200:9090
+  Collision Detection: True
+  API Server: http://0.0.0.0:8000
+==================================================
+Aubo Controller API stopped

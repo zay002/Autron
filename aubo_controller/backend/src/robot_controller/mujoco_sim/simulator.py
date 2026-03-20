@@ -74,11 +74,11 @@ class AuboSimulator:
         # Determine model path - use local MuJoCo-ready model by default
         if model_path is None:
             # Use the prepared MuJoCo-ready model in the local models directory
-            # This avoids ROS package:// path resolution issues
-            local_model = os.path.join(os.path.dirname(__file__), "models", "aubo_i5_mujoco", "aubo_i5.urdf")
+            # This uses aubo_i5_30 which is the actual production model
+            local_model = os.path.join(os.path.dirname(__file__), "models", "aubo_i5_30", "aubo_i5_30.urdf")
             if os.path.exists(local_model):
                 model_path = local_model
-                print(f"Loading Aubo i5 model from: {model_path}")
+                print(f"Loading Aubo i5_30 model from: {model_path}")
                 self.model = self._load_model_with_meshes(model_path)
             else:
                 print("WARNING: Aubo i5 MuJoCo model not found, using simplified arm model")

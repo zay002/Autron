@@ -125,6 +125,7 @@ async def lifespan(app: FastAPI):
         gravity=config.simulator.gravity,
         solver_iterations=config.simulator.solver_iterations,
     )
+    simulator.reset()  # Initialize to home position
     camera_service = create_camera_service(use_mock=True)
 
     print("=" * 50)

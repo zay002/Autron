@@ -1,0 +1,4 @@
+[0320/234246.794:ERROR:third_party\crashpad\crashpad\util\win\registration_protocol_win.cc:108] CreateFile: 拒绝访问。 (0x5)
+[17180:15688:0320/234247.186:ERROR:net\base\network_change_notifier_win.cc:263] WSALookupServiceBegin failed with: -1
+[17180:13640:0320/234247.201:FATAL:mojo\public\cpp\platform\platform_channel.cc:170] Check failed: . : 拒绝访问。 (0x5)
+[0320/234247.201:ERROR:third_party\crashpad\crashpad\client\crashpad_client_win.cc:154] crash server failed to launch

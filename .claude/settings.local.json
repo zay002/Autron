@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:developer.aubo-robotics.cn)",
+      "Bash(uv --version)",
+      "Bash(uv venv:*)",
+      "Bash(uv pip:*)",
+      "Bash(source .venv/Scripts/activate)",
+      "Bash(PYTHONPATH=./src python -c \"from robot_controller.api.main import app; print\\(''Backend imports OK''\\)\")",
+      "Bash(npm install:*)",
+      "Bash(PYTHONPATH=src D:/Autron/aubo_controller/backend/.venv/Scripts/python.exe -c \":*)"
+    ]
+  }
+}
