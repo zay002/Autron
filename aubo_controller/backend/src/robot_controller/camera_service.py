@@ -109,16 +109,19 @@ class MockCameraAdapter(CameraAdapter):
         if not self._connected:
             return None
 
-        # Generate a synthetic RGB frame with a gradient
+        # Generate a synthetic RGB frame with a gradient (vectorized)
         self._frame_count += 1
-        frame = np.zeros((self._height, self._width, self._channels), dtype=np.uint8)
 
-        # Create a gradient pattern
-        for y in range(self._height):
-            for x in range(self._width):
-                frame[y, x, 0] = int((x / self._width) * 255)  # R
-                frame[y, x, 1] = int((y / self._height) * 255)  # G
-                frame[y, x, 2] = 128  # B
+        # Create coordinate grids
+        x = np.linspace(0, 255, self._width, dtype=np.uint8)
+        y = np.linspace(0, 255, self._height, dtype=np.uint8)
+        xx, yy = np.meshgrid(x, y)
+
+        # Stack to create RGB image: R = x gradient, G = y gradient, B = 128
+        frame = np.zeros((self._height, self._width, self._channels), dtype=np.uint8)
+        frame[:, :, 0] = xx  # R channel
+        frame[:, :, 1] = yy  # G channel
+        frame[:, :, 2] = 128  # B channel
 
         # Add frame counter indicator (top-left corner)
         frame[0:30, 0:200] = [50, 50, 50]
@@ -250,6 +253,7 @@ class CameraService:
         return {
             "connected": self._adapter.is_connected(),
             "state": self._connection_state.value,
+            "is_mock": info.is_mock,
             "error_message": self._error_message,
             "camera_info": {
                 "name": info.name,
@@ -280,11 +284,14 @@ class CameraService:
 
             # Encode frame as JPEG for transport
             import base64
-            import cv2
+            from PIL import Image
+            import io
 
             if frame.data is not None:
-                _, buffer = cv2.imencode('.jpg', frame.data)
-                frame_base64 = base64.b64encode(buffer).decode('utf-8')
+                img = Image.fromarray(frame.data)
+                buffer = io.BytesIO()
+                img.save(buffer, format='JPEG')
+                frame_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
             else:
                 frame_base64 = None
 
