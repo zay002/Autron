@@ -1,176 +1,68 @@
-# Autron - Physical World Intelligent Agent
+﻿# Autron
 
-> Building an Aubot-class intelligent agent capable of perceiving and interacting with the physical world through robotics, computer vision, and AI.
+Autron is a robotics workspace centered on an AUBO arm, a browser control UI, MuJoCo simulation, and camera integration. The current repository already has a usable frontend/backend skeleton, but it is not yet a full real-robot perception-action stack.
 
-## Vision
+## Repository Layout
 
-The ultimate goal of **Autron** is to create an intelligent agent that:
+- `aubo_controller/`: main application
+- `aubo_controller/backend/`: FastAPI backend, robot control, simulation, camera service
+- `aubo_controller/frontend/`: React UI for control, simulation, and camera panels
+- `aubo_description-main/`: robot description assets and meshes
+- `aubo_test/`: isolated SDK test area for `pyaubo_sdk` and official examples
+- `AuboStudio_SDK_API.pdf`: local AUBO SDK reference
+- `eye-3d-camera-v2.5.4-zh.pdf`: local camera manual
 
-- **Perceives** the physical world through multi-modal sensors (RGB cameras, depth sensors, force feedback)
-- **Understands** environment context using computer vision and AI
-- **Acts** by controlling robotic systems with precision and safety
-- **Learns** from interactions to improve performance over time
+## Current Direction
 
-Inspired by the **Aubo i5** industrial robot arm, we are building a full-stack system that bridges digital intelligence with physical reality.
+The practical backend direction is:
 
-## Project Structure
+- `Python` as the main control plane
+- official `pyaubo_sdk` for robot communication
+- Mech-Eye SDK for perception
+- optional `C++` sidecar only for latency-critical execution loops
 
-```
-Autron/
-├── aubo_controller/          # Main robot control system
-│   ├── backend/              # FastAPI backend
-│   │   └── src/robot_controller/
-│   │       ├── robot_controller.py    # Core robot control
-│   │       ├── mujoco_sim/            # Physics simulation
-│   │       ├── camera_service.py       # Camera abstraction
-│   │       └── eye3d_camera_adapter.py # Eye 3D camera SDK
-│   ├── frontend/             # React + Three.js UI
-│   └── start_all.bat         # One-click launcher
-├── aubo_description-main/    # Aubo robot 3D models & URDF
-├── AuboStudio_SDK_API.pdf   # Aubo robot SDK documentation
-└── eye-3d-camera-v2.5.4-zh.pdf  # Eye 3D camera documentation
-```
+This is the right split if the project later needs VLA policies or agent-based robot control. Model orchestration, perception, planning, and tool calling are all easier in Python.
 
-## Current Progress
+## Current Progress (2026-03-22)
 
-### Phase 1: Robot Control Foundation ✅
-- [x] FastAPI backend with joint and Cartesian control
-- [x] Mujoco physics simulation with real Aubo i5 URDF model
-- [x] WebSocket real-time state updates
-- [x] Emergency stop and safety controls
+- MuJoCo-WASM + Three.js simulation is running in the browser.
+- AUBO model has actuator-based joint control and damping in simulation assets.
+- Integrated robot+gripper model path is now active in the frontend scene (`aubo_i5_with_ag95.xml`).
+- Frontend simulation ownership gating was added to avoid backend polling overriding local WASM setpoints.
+- Backend still provides simulation endpoints for joint/cartesian/jog and includes a Jacobian-based IK solver path.
 
-### Phase 2: Camera Integration ✅
-- [x] Camera service abstraction layer with adapter pattern
-- [x] Eye 3D M2-EyePro camera SDK integration
-- [x] Mock camera adapter for development/testing
-- [x] Frontend camera view panel (top-left of UI)
+## Main Gaps
 
-### Phase 3: User Interface ✅
-- [x] Left panel: Camera view (top) + Mujoco simulation (bottom)
-- [x] Right panel: Control console with joint sliders, config, logs
-- [x] Status indicators for backend, robot, and simulation
+The project still needs:
 
-### Phase 4: Physical World Perception 🔄 IN PROGRESS
-- [ ] Eye 3D camera frame acquisition
-- [ ] Depth image and point cloud support
-- [ ] Visual servoing for object tracking
+- frontend gripper open/close controls wired to the integrated AG95 actuator
+- robust local simulation state sync (rendered pose <-> Robot State / Joint Control UI)
+- local Cartesian Jog control path for frontend-owned simulation
+- unified IK control strategy between frontend-local sim and backend simulation endpoints
+- proven end-to-end real AUBO control through the official SDK lifecycle
+- Mech-Eye depth, point cloud, and calibration pipelines
+- world-frame perception outputs that motion planning can consume
+- safety gates before autonomous execution
 
-### Phase 5: Intelligent Control 🔄 PLANNED
-- [ ] Collision detection with real-time avoidance
-- [ ] Trajectory planning and optimization
-- [ ] AI-based skill learning from demonstrations
+## Key Documents
 
-## Technology Stack
+- `TODO.md`: architecture and implementation gaps for VLA/Agent plus Mech-Eye integration
+- `AGENTS.md`: contributor instructions for this repository
+- `aubo_controller/PROGRESS_PUBLIC.md`: public progress snapshot and next milestones
+- `aubo_test/PYAUBO_EXAMPLES_GUIDE.md`: mapping of official `pyaubo_sdk` examples to backend functions
 
-### Backend
-- **FastAPI** - REST API and WebSocket server
-- **Mujoco** - Physics simulation engine
-- **NumPy** - Numerical computation
-- **Eye3DViewer SDK** - 3D camera integration
+## Getting Started
 
-### Frontend
-- **React 18** - UI framework
-- **Three.js / React Three Fiber** - 3D visualization
-- **Zustand** - State management
-- **Vite** - Build tool
+To run the current controller app on Windows:
 
-### Robotics
-- **Aubo i5** - 6-DOF industrial robot arm
-- **pyaubo_sdk** - Aubo robot SDK (when available)
-- **Eye 3D M2-EyePro** - RGB-D camera
-
-## Quick Start
-
-```bash
-# Navigate to controller
-cd aubo_controller
-
-# Start backend and frontend
+```powershell
+cd D:\Autron\aubo_controller
 start_all.bat
-
-# Or manually:
-# Backend
-cd backend
-set PYTHONPATH=./src
-.venv\Scripts\activate.bat
-python -m robot_controller.api.main
-
-# Frontend (new terminal)
-cd frontend
-npm install
-npm run dev
 ```
 
-Access the UI at **http://localhost:3000**
+To inspect the official AUBO Python SDK examples:
 
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | System health check |
-| `/state` | GET | Robot state (positions, velocities) |
-| `/move/joints` | POST | Move to joint positions |
-| `/move/cartesian` | POST | Move to Cartesian position |
-| `/camera/status` | GET | Camera connection status |
-| `/camera/frame` | GET | Get camera frame (JPEG base64) |
-| `/stop` | POST | Emergency stop |
-| `/ws` | WebSocket | Real-time state stream |
-
-## Architecture
-
+```powershell
+cd D:\Autron\aubo_test
+.\.venv\Scripts\python.exe .\import_pyaubo_sdk.py
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Frontend                              │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │ Camera View │  │ Mujoco View │  │  Control Console    │ │
-│  │  (top)     │  │  (bottom)   │  │  (right panel)     │ │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
-└──────────────────────────┬──────────────────────────────────┘
-                          │ REST / WebSocket
-┌─────────────────────────┴──────────────────────────────────┐
-│                        Backend                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │ FastAPI     │  │ Mujoco Sim   │  │ Camera Service   │  │
-│  │ Server     │  │ (Physics)    │  │ (Eye3D Adapter)  │  │
-│  └──────────────┘  └──────────────┘  └──────────────────┘  │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-┌─────────────────────────┴───────────────────────────────────┐
-│                     Robot / Simulator                        │
-│  ┌──────────────────┐  ┌─────────────────────────────────┐ │
-│  │   Aubo i5 Arm    │  │    Eye 3D Camera M2-EyePro     │ │
-│  │  (or Simulation) │  │    (or Mock Camera)            │ │
-│  └──────────────────┘  └─────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Roadmap
-
-### Near Term (v0.2)
-- Complete Eye 3D camera RGB frame acquisition
-- Integrate depth imaging
-- Add point cloud visualization
-
-### Medium Term (v0.3)
-- Visual servoing for object tracking
-- Collision-free trajectory planning
-- MoveIt-compatible motion planning
-
-### Long Term (v1.0)
-- AI skill learning from human demonstrations
-- Self-supervised environment exploration
-- Multi-agent coordination capabilities
-
-## References
-
-- [Aubo Robot Official](https://www.aubo-robotics.com/)
-- [Mujoco Documentation](https://mujoco.readthedocs.io/)
-- [Eye 3D Camera SDK](./eye-3d-camera-v2.5.4-zh.pdf)
-
-## License
-
-MIT License - See individual project directories for details.
-
----
-
-**Autron** - Where intelligence meets physical reality.

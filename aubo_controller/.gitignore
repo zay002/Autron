@@ -41,3 +41,13 @@ manipulator_grasp/
 
 # Config with credentials
 backend/src/robot_controller/config.json
+
+# Environment variables (contains credentials)
+.env
+.env.local
+
+# Development process documents (do not upload)
+ARCHITECT.md
+RESPONSE.md
+REVIEW.md
+PYAUBO_BACKEND_INSTRUCTION.md

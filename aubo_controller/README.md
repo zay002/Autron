@@ -1,157 +1,76 @@
-# Aubo i5 机械臂控制系统
+﻿# AUBO Controller
 
-基于笔记本的 Aubo i5 机械臂控制器，包含 Mujoco 物理仿真、Eye 3D 相机集成和真实机械臂通信控制。
+This directory contains the main robot control application: a FastAPI backend, a React frontend, MuJoCo simulation, and camera integration.
 
-## 项目结构
+## Structure
 
-```
-aubo_controller/
-├── backend/
-│   ├── src/robot_controller/
-│   │   ├── robot_controller.py      # 机械臂控制接口
-│   │   ├── mujoco_sim/
-│   │   │   └── simulator.py         # Mujoco仿真器
-│   │   ├── api/
-│   │   │   └── main.py              # FastAPI服务
-│   │   ├── camera_service.py         # 相机服务抽象层
-│   │   ├── eye3d_camera_adapter.py   # Eye 3D相机适配器
-│   │   └── config.py                # 配置管理
-│   ├── pyproject.toml
-│   └── .venv/                       # uv虚拟环境 (已创建)
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── SimulationView.tsx   # 3D仿真视图
-│   │   │   ├── CameraView.tsx       # 相机视图
-│   │   │   └── ControlConsole.tsx   # 控制台
-│   │   ├── store/robotStore.ts
-│   │   └── App.tsx
-│   └── package.json
-├── start_all.bat                     # 一键启动脚本
-├── start_backend.bat                 # 仅启动后端
-└── README.md
-```
+- `backend/src/robot_controller/api/main.py`: REST and WebSocket API
+- `backend/src/robot_controller/robot_controller.py`: high-level robot controller
+- `backend/src/robot_controller/robot_client.py`: official `pyaubo_sdk` client path
+- `backend/src/robot_controller/aubo_socket.py`: legacy custom socket/WebSocket path that should not remain the primary real-robot path
+- `backend/src/robot_controller/mujoco_sim/`: MuJoCo simulator and robot model assets
+- `backend/src/robot_controller/camera_service.py`: camera abstraction layer
+- `backend/src/robot_controller/eye3d_camera_adapter.py`: current vendor-specific camera adapter
+- `frontend/src/components/`: UI panels for simulation, camera, and robot control
 
-## 快速开始
+## Run
 
-### 1. 依赖已安装
+Backend:
 
-后端虚拟环境已在 `backend/.venv` 创建。使用 uv 管理，核心依赖:
-
-```
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-websockets>=12.0
-numpy>=1.26.0
-mujoco>=3.1.0
-pydantic>=2.5.0
-python-multipart>=0.0.6
-pillow>=10.0.0
-```
-
-### 2. 一键启动 (推荐)
-
-双击运行 `start_all.bat`，同时启动后端和前端。
-
-### 3. 手动启动后端
-
-```bash
-cd backend
-.venv\Scripts\activate.bat
+```powershell
+cd D:\Autron\aubo_controller\backend
 set PYTHONPATH=.\src
 python -m robot_controller.api.main
 ```
 
-后端将在 http://localhost:8000 启动
+Frontend:
 
-### 4. 启动前端
-
-```bash
-cd frontend
-npm install   # 首次运行需要
+```powershell
+cd D:\Autron\aubo_controller\frontend
+npm install
 npm run dev
 ```
 
-前端将在 http://localhost:3000 启动
+Full app:
 
-### 5. 访问界面
+```powershell
+cd D:\Autron\aubo_controller
+start_all.bat
+```
 
-打开浏览器访问 http://localhost:3000
+## Current Technical Position
 
-## 功能说明
+The intended real-robot communication path is:
 
-### 界面布局
-- **左侧上部**: 相机视图 (Eye 3D相机或Mock)
-- **左侧下部**: Mujoco 3D仿真视图
-- **右侧**: 控制台 (连接、关节控制、配置、日志)
+- `pyaubo_sdk.RpcClient` on port `30004` for control and state requests
+- `pyaubo_sdk.RtdeClient` on port `30010` for telemetry streaming
 
-### Control (控制) 标签
-- **连接**: 输入Robot IP，点击Connect连接或Test测试连接
-- **关节控制**: 6个关节滑块调节角度
-- **速度调节**: 10%-100%
-- **快捷位置**: Home / Ready / Folded
-- **状态显示**: 实时关节角度和末端位置
+The project should not rely on a guessed robot-side protocol if it claims official AUBO support.
 
-### Config (配置) 标签
-- **Robot Settings**: IP地址、端口、仿真模式
-- **Motion Settings**: 速度、加速度、碰撞检测
-- **Simulator Settings**: GUI、重力等
-- **Save Configuration**: 保存配置到config.json
+## Public Progress (2026-03-22)
 
-### Console (控制台) 标签
-- 日志输出
+- Frontend simulation scene now loads an integrated robot+gripper model:
+  - `frontend/public/mjcf/assets/scenes/scene.xml`
+  - includes `../universal_robots_auboi5/aubo_i5_with_ag95.xml`
+- Frontend MuJoCo runtime added:
+  - runtime actuator name->index mapping (arm + gripper)
+  - initial ctrl seeding before stepping
+  - simulation ownership gating (`simulationOwner`) to avoid backend polling overriding local setpoints
+- Backend currently exposes:
+  - `/move/joints`, `/move/cartesian`, `/move/jog/start`, `/move/jog/stop`
+  - Jacobian-based IK path in simulation mode
 
-## API 端点
+See `PROGRESS_PUBLIC.md` for milestone status and next actions.
 
-| 端点 | 方法 | 描述 |
-|------|------|------|
-| `/` | GET | 健康检查 |
-| `/health` | GET | 详细状态 |
-| `/config` | GET/POST | 配置管理 |
-| `/connect` | POST | 连接机械臂 |
-| `/disconnect` | POST | 断开连接 |
-| `/stop` | POST | 紧急停止 |
-| `/test-connection` | POST | 测试连接 |
-| `/state` | GET | 机械臂状态 |
-| `/move/joints` | POST | 关节运动 |
-| `/move/cartesian` | POST | 笛卡尔运动 |
-| `/camera/status` | GET | 相机状态 |
-| `/camera/connect` | POST | 连接相机 |
-| `/camera/disconnect` | POST | 断开相机 |
-| `/camera/frame` | GET | 获取相机帧 |
-| `/ws` | WebSocket | 实时状态 |
+## What Is Still Missing
 
-## 相机支持
+- proof that connect, startup, state read, and motion execute on a real AUBO robot
+- a single truthful state model for robot, simulation, and camera connectivity
+- a perception pipeline that outputs calibrated 3D information in the robot/world frame
+- a planning and execution layer suitable for VLA or agent-driven tasks
+- stronger safety gating for autonomous commands
 
-### Eye 3D相机 (M2-EyePro系列)
+## Related Files
 
-支持型号:
-- M2-EyePro-000: USB3.0 灰度相机
-- M2-EyePro-001: USB3.0 彩色相机 (1280x720)
-- M2-EyePro-002: USB3.0 深度相机
-
-使用 Eye3DViewer SDK (Eye3DViewer_API.dll)，通过 ctypes 调用。
-
-### Mock相机
-
-无硬件时使用Mock模式，显示合成渐变帧用于开发测试。界面显示"Mock"标签区分。
-
-## 仿真模式 vs 真实机械臂
-
-- **仿真模式 (默认)**: 不需要连接真实机械臂，用于开发和测试
-- **真实机械臂**: 取消勾选Simulation Mode，输入正确IP连接
-
-## 注意事项
-
-1. **Mujoco License**: 如需使用Mujoco仿真，需要从 https://www.roboti.us/license.html 获取免费许可证
-2. **pyaubo_sdk**: 连接真实机械臂需要安装Aubo官方SDK
-3. **Eye3DViewer SDK**: 连接Eye 3D相机需要安装厂商SDK并配置DLL路径
-4. **Python版本**: 支持Python 3.6-3.11
-
-## 参考资料
-
-- Aubo SDK API文档: `../../AuboStudio_SDK_API.pdf`
-- Eye 3D相机文档: `../../eye-3d-camera-v2.5.4-zh.pdf`
-- 机械臂描述文件: `../../aubo_description-main/`
-- [Aubo开发者官网](https://developer.aubo-robotics.cn/)
-- [aubo_description GitHub](https://github.com/AuboRobot/aubo_description)
+- `PROGRESS_PUBLIC.md`: public implementation progress and next milestone checklist
+- `..\TODO.md`: repository-level architecture TODO list

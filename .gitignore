@@ -1,0 +1,5 @@
+# Keep only the main project folder tracked at repository root.
+/*
+!/.gitignore
+!/aubo_controller/
+
