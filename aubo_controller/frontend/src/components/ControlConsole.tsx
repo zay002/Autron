@@ -31,16 +31,20 @@ export function ControlConsole() {
   const [speed, setSpeed] = useState(50)
   const [logs, setLogs] = useState<string[]>([])
   const [robotIp, setRobotIp] = useState('192.168.1.100')
+  const [cameraIp, setCameraIp] = useState('192.168.1.101')
 
   // Load config on mount
   useEffect(() => {
     loadConfig()
   }, [loadConfig])
 
-  // Update robot IP from config
+  // Update IPs from config
   useEffect(() => {
     if (config?.robot?.robot_ip) {
       setRobotIp(config.robot.robot_ip)
+    }
+    if (config?.camera?.camera_ip) {
+      setCameraIp(config.camera.camera_ip)
     }
   }, [config])
 
@@ -114,17 +118,11 @@ export function ControlConsole() {
       <div style={styles.content}>
         {activeTab === 'control' && (
           <ControlTab
-            robotIp={robotIp}
-            setRobotIp={setRobotIp}
-            connectionState={connectionState}
-            connectionTestResult={connectionTestResult}
             targetPositions={targetPositions}
             speed={speed}
             jointPositions={jointPositions}
             endEffectorPosition={endEffectorPosition}
             isConnected={isConnected}
-            onConnect={handleConnect}
-            onTestConnection={handleTestConnection}
             onMoveToPosition={handleMoveToPosition}
             onSliderChange={handleSliderChange}
             onSpeedChange={setSpeed}
@@ -144,8 +142,21 @@ export function ControlConsole() {
           <ConfigTab
             config={config}
             robotIp={robotIp}
+            cameraIp={cameraIp}
             onRobotIpChange={setRobotIp}
+            onCameraIpChange={setCameraIp}
             onUpdateConfig={updateConfig}
+            connectionState={connectionState}
+            connectionTestResult={connectionTestResult}
+            onConnect={handleConnect}
+            onTestConnection={handleTestConnection}
+            onSave={() => {
+              updateConfig({
+                robot: { ...config?.robot, robot_ip: robotIp },
+                camera: { ...config?.camera, camera_ip: cameraIp },
+              })
+              addLog('Configuration saved')
+            }}
           />
         )}
 
@@ -158,17 +169,11 @@ export function ControlConsole() {
 }
 
 interface ControlTabProps {
-  robotIp: string
-  setRobotIp: (ip: string) => void
-  connectionState: string
-  connectionTestResult: { reachable: boolean; message: string } | null
   targetPositions: number[]
   speed: number
   jointPositions: number[]
   endEffectorPosition: number[]
   isConnected: boolean
-  onConnect: () => void
-  onTestConnection: () => void
   onMoveToPosition: () => void
   onSliderChange: (index: number, value: number) => void
   onSpeedChange: (speed: number) => void
@@ -178,17 +183,11 @@ interface ControlTabProps {
 }
 
 function ControlTab({
-  robotIp,
-  setRobotIp,
-  connectionState,
-  connectionTestResult,
   targetPositions,
   speed,
   jointPositions,
   endEffectorPosition,
   isConnected,
-  onConnect,
-  onTestConnection,
   onMoveToPosition,
   onSliderChange,
   onSpeedChange,
@@ -198,68 +197,6 @@ function ControlTab({
 }: ControlTabProps) {
   return (
     <div style={styles.scrollContent}>
-      {/* Connection Panel */}
-      <Panel title="Connection">
-        <div style={styles.connectionRow}>
-          <input
-            type="text"
-            placeholder="Robot IP"
-            value={robotIp}
-            onChange={(e) => setRobotIp(e.target.value)}
-            disabled={isConnected}
-            style={styles.input}
-          />
-          <button
-            onClick={onTestConnection}
-            disabled={isConnected}
-            style={styles.testButton}
-          >
-            Test
-          </button>
-        </div>
-
-        {/* Connection Test Result */}
-        {connectionTestResult && (
-          <div
-            style={{
-              ...styles.testResult,
-              background: connectionTestResult.reachable ? '#1a4731' : '#4a1f1f',
-              borderColor: connectionTestResult.reachable ? '#38a169' : '#e53e3e',
-            }}
-          >
-            <span style={styles.testIcon}>
-              {connectionTestResult.reachable ? '✓' : '✗'}
-            </span>
-            <span>{connectionTestResult.message}</span>
-          </div>
-        )}
-
-        <div style={styles.connectionButtons}>
-          <button
-            onClick={onConnect}
-            style={{
-              ...styles.button,
-              flex: 1,
-              background: isConnected ? '#e53e3e' : '#38a169',
-            }}
-          >
-            {isConnected ? 'Disconnect' : 'Connect'}
-          </button>
-        </div>
-
-        <div style={styles.statusRow}>
-          <span style={styles.statusLabel}>Status:</span>
-          <span
-            style={{
-              ...styles.statusValue,
-              color: isConnected ? '#38a169' : '#e53e3e',
-            }}
-          >
-            {connectionState}
-          </span>
-        </div>
-      </Panel>
-
       {/* Joint Control Panel */}
       <Panel title="Joint Control">
         <div style={styles.jointGrid}>
@@ -388,18 +325,31 @@ function ControlTab({
 interface ConfigTabProps {
   config: any
   robotIp: string
+  cameraIp: string
   onRobotIpChange: (ip: string) => void
+  onCameraIpChange: (ip: string) => void
   onUpdateConfig: (updates: any) => void
+  connectionState: string
+  connectionTestResult: { reachable: boolean; message: string } | null
+  onConnect: () => void
+  onTestConnection: () => void
+  onSave: () => void
 }
 
-function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigTabProps) {
-  const [localConfig, setLocalConfig] = useState(config)
-
-  useEffect(() => {
-    setLocalConfig(config)
-  }, [config])
-
-  if (!localConfig) return <div style={styles.scrollContent}>Loading...</div>
+function ConfigTab({
+  config,
+  robotIp,
+  cameraIp,
+  onRobotIpChange,
+  onCameraIpChange,
+  onUpdateConfig,
+  connectionState,
+  connectionTestResult,
+  onConnect,
+  onTestConnection,
+  onSave,
+}: ConfigTabProps) {
+  const isConnected = connectionState === 'connected'
 
   return (
     <div style={styles.scrollContent}>
@@ -419,11 +369,10 @@ function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigT
           <label style={styles.label}>Robot Port</label>
           <input
             type="number"
-            value={localConfig.robot?.robot_port || 8080}
+            value={config?.robot?.robot_port || 8080}
             onChange={(e) =>
-              setLocalConfig({
-                ...localConfig,
-                robot: { ...localConfig.robot, robot_port: parseInt(e.target.value) },
+              onUpdateConfig({
+                robot: { ...config?.robot, robot_port: parseInt(e.target.value) },
               })
             }
             style={styles.input}
@@ -434,16 +383,77 @@ function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigT
           <label style={styles.checkboxLabel}>
             <input
               type="checkbox"
-              checked={localConfig.robot?.simulation ?? true}
+              checked={config?.robot?.simulation ?? true}
               onChange={(e) =>
-                setLocalConfig({
-                  ...localConfig,
-                  robot: { ...localConfig.robot, simulation: e.target.checked },
+                onUpdateConfig({
+                  robot: { ...config?.robot, simulation: e.target.checked },
                 })
               }
             />
             <span>Simulation Mode</span>
           </label>
+        </div>
+
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Timeout (s)</label>
+          <input
+            type="number"
+            value={config?.robot?.connection_timeout || 10}
+            onChange={(e) =>
+              onUpdateConfig({
+                robot: { ...config?.robot, connection_timeout: parseInt(e.target.value) },
+              })
+            }
+            style={styles.input}
+          />
+        </div>
+
+        {/* Connection Test */}
+        <div style={styles.connectionTest}>
+          <button
+            onClick={onTestConnection}
+            disabled={isConnected}
+            style={styles.testButton}
+          >
+            Test Connection
+          </button>
+          {connectionTestResult && (
+            <div
+              style={{
+                ...styles.testResult,
+                background: connectionTestResult.reachable ? '#e8f5e9' : '#ffebee',
+                borderColor: connectionTestResult.reachable ? '#4caf50' : '#f44336',
+                color: connectionTestResult.reachable ? '#2e7d32' : '#d32f2f',
+              }}
+            >
+              {connectionTestResult.reachable ? '✓' : '✗'} {connectionTestResult.message}
+            </div>
+          )}
+        </div>
+
+        {/* Connect Button */}
+        <button
+          onClick={onConnect}
+          style={{
+            ...styles.button,
+            width: '100%',
+            marginTop: '12px',
+            background: isConnected ? '#f44336' : '#4caf50',
+          }}
+        >
+          {isConnected ? 'Disconnect' : 'Connect'}
+        </button>
+
+        <div style={styles.statusRow}>
+          <span style={styles.statusLabel}>Status:</span>
+          <span
+            style={{
+              ...styles.statusValue,
+              color: isConnected ? '#4caf50' : '#f44336',
+            }}
+          >
+            {connectionState}
+          </span>
         </div>
       </Panel>
 
@@ -453,13 +463,8 @@ function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigT
           <label style={styles.label}>Camera IP</label>
           <input
             type="text"
-            value={localConfig.camera?.camera_ip || '192.168.1.101'}
-            onChange={(e) =>
-              setLocalConfig({
-                ...localConfig,
-                camera: { ...localConfig.camera, camera_ip: e.target.value },
-              })
-            }
+            value={cameraIp}
+            onChange={(e) => onCameraIpChange(e.target.value)}
             style={styles.input}
           />
         </div>
@@ -468,11 +473,10 @@ function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigT
           <label style={styles.label}>Camera Port</label>
           <input
             type="number"
-            value={localConfig.camera?.camera_port || 8081}
+            value={config?.camera?.camera_port || 8081}
             onChange={(e) =>
-              setLocalConfig({
-                ...localConfig,
-                camera: { ...localConfig.camera, camera_port: parseInt(e.target.value) },
+              onUpdateConfig({
+                camera: { ...config?.camera, camera_port: parseInt(e.target.value) },
               })
             }
             style={styles.input}
@@ -483,12 +487,11 @@ function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigT
           <label style={styles.checkboxLabel}>
             <input
               type="checkbox"
-              checked={localConfig.camera?.use_mock ?? true}
+              checked={config?.camera?.use_mock ?? true}
               onChange={(e) =>
-                setLocalConfig({
-                  ...localConfig,
-                  camera: { ...localConfig.camera, use_mock: e.target.checked },
-                })
+              onUpdateConfig({
+                camera: { ...config?.camera, use_mock: e.target.checked },
+              })
               }
             />
             <span>Use Mock Camera</span>
@@ -499,35 +502,16 @@ function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigT
       {/* Motion Settings */}
       <Panel title="Motion Settings">
         <div style={styles.formGroup}>
-          <label style={styles.label}>Default Speed ({((localConfig.motion?.default_speed || 0.5) * 100).toFixed(0)}%)</label>
+          <label style={styles.label}>Default Speed ({((config?.motion?.default_speed || 0.5) * 100).toFixed(0)}%)</label>
           <input
             type="range"
             min={0.1}
             max={1.0}
             step={0.1}
-            value={localConfig.motion?.default_speed || 0.5}
+            value={config?.motion?.default_speed || 0.5}
             onChange={(e) =>
-              setLocalConfig({
-                ...localConfig,
-                motion: { ...localConfig.motion, default_speed: parseFloat(e.target.value) },
-              })
-            }
-            style={styles.slider}
-          />
-        </div>
-
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Default Acceleration ({((localConfig.motion?.default_acceleration || 0.5) * 100).toFixed(0)}%)</label>
-          <input
-            type="range"
-            min={0.1}
-            max={1.0}
-            step={0.1}
-            value={localConfig.motion?.default_acceleration || 0.5}
-            onChange={(e) =>
-              setLocalConfig({
-                ...localConfig,
-                motion: { ...localConfig.motion, default_acceleration: parseFloat(e.target.value) },
+              onUpdateConfig({
+                motion: { ...config?.motion, default_speed: parseFloat(e.target.value) },
               })
             }
             style={styles.slider}
@@ -538,11 +522,10 @@ function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigT
           <label style={styles.checkboxLabel}>
             <input
               type="checkbox"
-              checked={localConfig.motion?.collision_detection ?? true}
+              checked={config?.motion?.collision_detection ?? true}
               onChange={(e) =>
-                setLocalConfig({
-                  ...localConfig,
-                  motion: { ...localConfig.motion, collision_detection: e.target.checked },
+                onUpdateConfig({
+                  motion: { ...config?.motion, collision_detection: e.target.checked },
                 })
               }
             />
@@ -555,11 +538,10 @@ function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigT
           <input
             type="number"
             step={0.01}
-            value={localConfig.motion?.collision_threshold || 0.05}
+            value={config?.motion?.collision_threshold || 0.05}
             onChange={(e) =>
-              setLocalConfig({
-                ...localConfig,
-                motion: { ...localConfig.motion, collision_threshold: parseFloat(e.target.value) },
+              onUpdateConfig({
+                motion: { ...config?.motion, collision_threshold: parseFloat(e.target.value) },
               })
             }
             style={styles.input}
@@ -573,11 +555,10 @@ function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigT
           <label style={styles.checkboxLabel}>
             <input
               type="checkbox"
-              checked={localConfig.simulator?.gui_enabled ?? true}
+              checked={config?.simulator?.gui_enabled ?? true}
               onChange={(e) =>
-                setLocalConfig({
-                  ...localConfig,
-                  simulator: { ...localConfig.simulator, gui_enabled: e.target.checked },
+                onUpdateConfig({
+                  simulator: { ...config?.simulator, gui_enabled: e.target.checked },
                 })
               }
             />
@@ -590,11 +571,10 @@ function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigT
           <input
             type="number"
             step={0.1}
-            value={localConfig.simulator?.gravity || -9.81}
+            value={config?.simulator?.gravity || -9.81}
             onChange={(e) =>
-              setLocalConfig({
-                ...localConfig,
-                simulator: { ...localConfig.simulator, gravity: parseFloat(e.target.value) },
+              onUpdateConfig({
+                simulator: { ...config?.simulator, gravity: parseFloat(e.target.value) },
               })
             }
             style={styles.input}
@@ -603,12 +583,7 @@ function ConfigTab({ config, robotIp, onRobotIpChange, onUpdateConfig }: ConfigT
       </Panel>
 
       {/* Save Button */}
-      <button
-        onClick={async () => {
-          await onUpdateConfig(localConfig)
-        }}
-        style={styles.saveButton}
-      >
+      <button onClick={onSave} style={styles.saveButton}>
         Save Configuration
       </button>
     </div>
@@ -711,10 +686,6 @@ const styles: Record<string, React.CSSProperties> = {
   panelContent: {
     padding: '12px',
   },
-  connectionRow: {
-    display: 'flex',
-    gap: '8px',
-  },
   input: {
     flex: 1,
     padding: '8px 12px',
@@ -734,22 +705,11 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
   },
   testResult: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
     marginTop: '8px',
     padding: '8px 12px',
     borderRadius: '4px',
     border: '1px solid',
     fontSize: '12px',
-  },
-  testIcon: {
-    fontWeight: 'bold',
-  },
-  connectionButtons: {
-    display: 'flex',
-    gap: '8px',
-    marginTop: '12px',
   },
   button: {
     padding: '10px 16px',
@@ -760,6 +720,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '13px',
     cursor: 'pointer',
     fontWeight: 500,
+  },
+  connectionTest: {
+    marginTop: '12px',
   },
   statusRow: {
     display: 'flex',

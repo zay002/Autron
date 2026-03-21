@@ -42,6 +42,13 @@ controller: Optional[AuboRobotController] = None
 simulator: Optional[AuboSimulator] = None
 camera_service: Optional[CameraService] = None
 
+# Jog state for simulation
+_jog_task: Optional[asyncio.Task] = None
+_jog_active: bool = False
+_jog_axis: str = ""
+_jog_direction: int = 1
+_jog_speed: float = 0.05
+
 
 # Pydantic models for API
 
@@ -391,10 +398,28 @@ async def test_connection(request: ConnectionTestRequest):
 
 @app.get("/state")
 async def get_state():
-    """Get current robot state."""
+    """Get current robot state.
+
+    In simulation mode, returns actual simulator state for accurate right panel display.
+    """
     if not controller:
         raise HTTPException(status_code=503, detail="Controller not initialized")
 
+    # In simulation mode, return actual simulator state
+    if simulator:
+        sim_state = simulator.get_observation()
+        return {
+            "joint_positions": sim_state["joint_positions"],
+            "joint_velocities": sim_state["joint_velocities"],
+            "end_effector_position": sim_state["end_effector_position"],
+            "end_effector_orientation": sim_state["end_effector_orientation"],
+            "connection_state": "connected",
+            "robot_mode": "playback",
+            "timestamp": sim_state["time"],
+            "source": "simulator",
+        }
+
+    # Fall back to controller state for real robot
     state = await controller.get_state()
     return {
         "joint_positions": state.joint_positions,
@@ -404,6 +429,7 @@ async def get_state():
         "connection_state": state.connection_state.value,
         "robot_mode": state.robot_mode.value,
         "timestamp": state.timestamp,
+        "source": "robot",
     }
 
 
@@ -443,6 +469,39 @@ async def move_cartesian(command: CartesianCommand):
         blocking=command.blocking,
     )
 
+    # For simulation: do simple joint interpolation toward target
+    if simulator and success:
+        current_pos = simulator.get_end_effector_position()
+        target = np.array(command.position)
+
+        # Simple approach: interpolate joints based on position delta
+        # This is an approximation - proper IK would require more work
+        current_joints = simulator.get_joint_positions()
+
+        # Compute direction to target and apply joint delta
+        delta = target - current_pos
+        distance = np.linalg.norm(delta)
+
+        if distance > 0.001:  # If more than 1mm away
+            # Scale joint changes based on distance (simple heuristic)
+            scale = min(distance * 0.5, 0.1)  # Cap at 0.1 rad per joint
+            joint_delta = np.array([0.01, 0.01, 0.01, 0.005, 0.005, 0.005]) * scale * 10
+
+            # Add/subtract based on direction
+            if delta[0] > 0.001:
+                current_joints += joint_delta
+            elif delta[0] < -0.001:
+                current_joints -= joint_delta
+
+            if delta[1] > 0.001:
+                current_joints[0] += joint_delta[0] * 0.5
+            if delta[2] > 0.001:
+                current_joints[1] += joint_delta[1]
+
+            # Clamp to joint limits
+            current_joints = np.clip(current_joints, -3.04, 3.04)
+            simulator.set_joint_positions(current_joints)
+
     return {"success": success}
 
 
@@ -452,23 +511,83 @@ class JogRequest(BaseModel):
     speed: float = 0.05
 
 
+async def _jog_loop(axis: str, direction: int, speed: float):
+    """Background task for continuous jog motion in simulation."""
+    global _jog_active
+    _jog_active = True
+
+    # Joint delta per step for each axis (approximate values)
+    joint_deltas = {
+        'x': [0.01, 0.01, 0.01, 0.005, 0.005, 0.005],
+        'y': [0.01, 0.01, 0.01, 0.005, 0.005, 0.005],
+        'z': [0.01, 0.01, 0.01, 0.005, 0.005, 0.005],
+        'rx': [0.02, 0, 0, 0, 0, 0],
+        'ry': [0, 0.02, 0, 0, 0, 0],
+        'rz': [0, 0, 0.02, 0, 0, 0],
+    }
+
+    delta = joint_deltas.get(axis, [0] * 6)
+    step_size = speed * direction
+
+    while _jog_active and simulator:
+        try:
+            current = simulator.get_joint_positions()
+            new_positions = current + np.array(delta) * step_size
+            # Clamp to joint limits
+            new_positions = np.clip(new_positions, -3.04, 3.04)
+            simulator.set_joint_positions(new_positions)
+            await asyncio.sleep(0.05)  # ~20Hz jog rate
+        except Exception:
+            break
+
+    _jog_active = False
+
+
 @app.post("/move/jog/start")
 async def jog_start(request: JogRequest):
     """Start continuous jog motion along an axis."""
+    global _jog_task, _jog_axis, _jog_direction, _jog_speed
+
     if not controller:
         raise HTTPException(status_code=503, detail="Controller not initialized")
 
-    success = await controller.jog_start(request.axis, request.direction, request.speed)
-    return {"success": success}
+    # Stop any existing jog
+    if _jog_task:
+        _jog_active = False
+        _jog_task.cancel()
+
+    # Start new jog
+    _jog_axis = request.axis
+    _jog_direction = request.direction
+    _jog_speed = request.speed
+
+    await controller.jog_start(request.axis, request.direction, request.speed)
+
+    # Start background jog loop for simulation
+    if simulator:
+        _jog_task = asyncio.create_task(_jog_loop(request.axis, request.direction, request.speed))
+
+    return {"success": True}
 
 
 @app.post("/move/jog/stop")
 async def jog_stop():
     """Stop continuous jog motion."""
+    global _jog_task, _jog_active
+
     if not controller:
         raise HTTPException(status_code=503, detail="Controller not initialized")
 
-    success = await controller.jog_stop()
+    # Stop background jog task
+    _jog_active = False
+    if _jog_task:
+        _jog_task.cancel()
+        _jog_task = None
+
+    await controller.jog_stop()
+
+    return {"success": True}
+
     return {"success": success}
 
 
@@ -561,24 +680,70 @@ async def step_simulator():
 
 
 @app.get("/simulator/render")
-async def render_simulator(width: int = 640, height: int = 480):
+async def render_simulator(
+    width: int = 640,
+    height: int = 480,
+    azimuth: float = 0,
+    elevation: float = -30,
+    distance: float = 3,
+    lookat_x: float = 0,
+    lookat_y: float = 0,
+    lookat_z: float = 0.3,
+):
     """
     Get a rendered image of the current simulator state.
 
-    Returns a PNG image of the MuJoCo-rendered robot.
+    Camera parameters:
+    - azimuth: horizontal rotation in degrees (default 0)
+    - elevation: vertical rotation in degrees (default -30)
+    - distance: camera distance from lookat point (default 3)
+    - lookat_x, lookat_y, lookat_z: the point the camera looks at
     """
     if not simulator:
         raise HTTPException(status_code=503, detail="Simulator not initialized")
 
     try:
-        image_bytes = simulator.render_image(width=width, height=height)
+        lookat = [lookat_x, lookat_y, lookat_z]
+        image_bytes = simulator.render_image(
+            width=width, height=height,
+            azimuth=azimuth, elevation=elevation,
+            distance=distance, lookat=lookat
+        )
+
+        # Black frame detection: check mean luminance
+        num_pixels = width * height
+        pixels_per_byte = 3  # RGB
+        total_vals = num_pixels * pixels_per_byte
+        if len(image_bytes) == total_vals:
+            mean_val = sum(image_bytes) / total_vals
+            if mean_val < 1.0:  # Near-black frame
+                return {
+                    "success": False,
+                    "error": f"Rendered frame is black (mean luminance: {mean_val:.2f}). Check lighting or camera pose.",
+                    "width": width,
+                    "height": height,
+                    "camera": {
+                        "azimuth": azimuth,
+                        "elevation": elevation,
+                        "distance": distance,
+                        "lookat": lookat,
+                    }
+                }
+
         import base64
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
         return {
             "success": True,
-            "image": f"data:image/png;base64,{image_base64}",
+            "image": f"data:image/raw;base64,{image_base64}",
+            "format": "raw",
             "width": width,
             "height": height,
+            "camera": {
+                "azimuth": azimuth,
+                "elevation": elevation,
+                "distance": distance,
+                "lookat": lookat,
+            }
         }
     except Exception as e:
         return {"success": False, "error": str(e)}

@@ -175,10 +175,19 @@ class CameraService:
         """
         try:
             if self._connection_state == CameraConnectionState.CONNECTED:
+                info = self._adapter.get_info()
                 return {
                     "success": True,
                     "message": "Already connected",
+                    "connected": True,
                     "state": self._connection_state.value,
+                    "camera_info": {
+                        "name": info.name,
+                        "serial": info.serial,
+                        "resolution": info.resolution,
+                        "firmware_version": info.firmware_version,
+                        "is_mock": info.is_mock,
+                    },
                 }
 
             self._connection_state = CameraConnectionState.CONNECTING
@@ -192,6 +201,7 @@ class CameraService:
                 return {
                     "success": True,
                     "message": "Connected successfully",
+                    "connected": True,
                     "state": self._connection_state.value,
                     "camera_info": {
                         "name": info.name,
@@ -207,6 +217,7 @@ class CameraService:
                 return {
                     "success": False,
                     "message": self._error_message,
+                    "connected": False,
                     "state": self._connection_state.value,
                 }
 
@@ -216,6 +227,7 @@ class CameraService:
             return {
                 "success": False,
                 "message": f"Connection error: {e}",
+                "connected": False,
                 "state": self._connection_state.value,
             }
 
@@ -325,12 +337,13 @@ def create_camera_service(use_mock: bool = True) -> CameraService:
     Create a camera service.
 
     Args:
-        use_mock: If True, uses mock adapter. If False, would use real adapter.
+        use_mock: If True, uses mock adapter. If False, uses real Eye3D adapter.
 
     Returns:
         CameraService instance.
     """
     if use_mock:
         return CameraService(MockCameraAdapter())
-    # Future: Real camera adapter would be instantiated here
-    # return CameraService(RealCameraAdapter())
+    # Use real Eye 3D camera adapter
+    from robot_controller.eye3d_camera_adapter import Eye3DCameraAdapter
+    return CameraService(Eye3DCameraAdapter())

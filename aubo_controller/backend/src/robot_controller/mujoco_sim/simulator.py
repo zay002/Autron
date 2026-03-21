@@ -15,25 +15,25 @@ import mujoco
 import mujoco.viewer
 
 
-# Robot joint configuration for Aubo i5
-# 6 joints matching the real URDF joint names
+# Robot joint configuration for Aubo i5 (from manipulator_grasp model)
+# 6 joints matching the MuJoCo MJCF model joint names
 AUBO_I5_JOINT_NAMES = [
-    "shoulder_joint",
-    "upperArm_joint",
-    "foreArm_joint",
-    "wrist1_joint",
-    "wrist2_joint",
-    "wrist3_joint",
+    "shoulder_pan_joint",
+    "shoulder_lift_joint",
+    "elbow_joint",
+    "wrist_1_joint",
+    "wrist_2_joint",
+    "wrist_3_joint",
 ]
 
-# Joint angle limits (radians)
+# Joint angle limits (radians) - from model range
 AUBO_I5_JOINT_LIMITS = {
-    "shoulder_joint": (-np.pi, np.pi),       # ±360°
-    "upperArm_joint": (-np.pi / 2, np.pi / 2),  # ±90°
-    "foreArm_joint": (-np.pi, np.pi),       # ±180°
-    "wrist1_joint": (-np.pi, np.pi),       # ±180°
-    "wrist2_joint": (-np.pi / 2, np.pi / 2),  # ±90°
-    "wrist3_joint": (-np.pi, np.pi),       # ±360°
+    "shoulder_pan_joint": (-3.04, 3.04),
+    "shoulder_lift_joint": (-3.04, 3.04),
+    "elbow_joint": (-3.04, 3.04),
+    "wrist_1_joint": (-3.04, 3.04),
+    "wrist_2_joint": (-3.04, 3.04),
+    "wrist_3_joint": (-3.04, 3.04),
 }
 
 
@@ -73,15 +73,26 @@ class AuboSimulator:
 
         # Determine model path - use local MuJoCo-ready model by default
         if model_path is None:
-            # Use the prepared MuJoCo-ready model in the local models directory
-            # This uses aubo_i5_30 which is the actual production model
-            local_model = os.path.join(os.path.dirname(__file__), "models", "aubo_i5_30", "aubo_i5_30.urdf")
+            # Use the complete scene from manipulator_grasp which includes:
+            # - aubO_i5 robot
+            # - AG95 gripper
+            # - Tables and objects (Apple, Banana, Hammer, Knife, Duck)
+            # - Lighting, ground plane, and coordinate axes
+            # Resolve relative to this file's location
+            # File: backend/src/robot_controller/mujoco_sim/simulator.py
+            # Go up 4 levels to reach project root: D:/Autron/aubo_controller/
+            sim_dir = os.path.dirname(os.path.abspath(__file__))  # mujoco_sim/
+            robot_ctrl_dir = os.path.dirname(sim_dir)  # robot_controller/
+            src_dir = os.path.dirname(robot_ctrl_dir)  # src/
+            backend_dir = os.path.dirname(src_dir)  # backend/
+            project_root = os.path.dirname(backend_dir)  # aubo_controller/
+            local_model = os.path.join(project_root, "manipulator_grasp", "assets", "scenes", "scene.xml")
             if os.path.exists(local_model):
                 model_path = local_model
-                print(f"Loading Aubo i5_30 model from: {model_path}")
+                print(f"Loading model from: {model_path}")
                 self.model = self._load_model_with_meshes(model_path)
             else:
-                print("WARNING: Aubo i5 MuJoCo model not found, using simplified arm model")
+                print(f"WARNING: Model not found at {local_model}, using simplified arm model")
                 self.model = self._create_simple_arm_model()
         else:
             self.model = self._load_model_with_meshes(model_path)
@@ -96,8 +107,21 @@ class AuboSimulator:
         self.data = mujoco.MjData(self.model)
         self.viewer = None
 
-        # Initialize to home position
-        self.home_position = np.array([0.0, -0.785, 1.571, 0.0, 1.571, 0.0])  # radians
+        # Store model path for reference
+        self.model_path = model_path
+
+        # Fix scene collision - enable collision on tables
+        self._fix_table_collision()
+
+        # Initialize to home position (all zeros - relaxed position)
+        self.home_position = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # radians
+
+        # Desired positions for posture holding (updated by set_joint_positions)
+        self._desired_positions = self.home_position.copy()
+
+        # PD control gains for posture holding
+        self._kp = 10.0  # Proportional gain
+        self._kd = 2.0   # Derivative gain
 
     def _load_model_with_meshes(self, model_path: str) -> mujoco.MjModel:
         """
@@ -205,6 +229,9 @@ class AuboSimulator:
             if joint_id >= 0:
                 self.data.qpos[joint_id] = positions[i]
 
+        # Update desired positions for posture holding
+        self._desired_positions = np.array(positions)
+
         mujoco.mj_forward(self.model, self.data)
 
     def get_joint_positions(self) -> np.ndarray:
@@ -221,15 +248,26 @@ class AuboSimulator:
         Step the simulation forward.
 
         Args:
-            control: Control torques for each joint. If None, holds current position.
+            control: Control torques for each joint. If None, applies PD position control to hold current posture.
         """
         if control is not None:
             if len(control) != 6:
                 raise ValueError(f"Expected 6 control torques, got {len(control)}")
             self.data.ctrl[:] = control
         else:
-            # Hold current position with zero control (gravity compensation would be needed for real world)
-            self.data.ctrl[:] = 0
+            # PD position control to hold desired joint positions
+            for i, name in enumerate(AUBO_I5_JOINT_NAMES):
+                joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
+                if joint_id >= 0:
+                    # Get DOF address for this joint
+                    dof_addr = self.model.jnt_dofadr[joint_id]
+                    if dof_addr >= 0:
+                        current_pos = self.data.qpos[joint_id]
+                        current_vel = self.data.qvel[dof_addr]
+                        desired_pos = self._desired_positions[i]
+                        error = desired_pos - current_pos
+                        # PD control: torque = Kp * error - Kd * velocity
+                        self.data.ctrl[i] = self._kp * error - self._kd * current_vel
 
         mujoco.mj_step(self.model, self.data)
 
@@ -240,9 +278,9 @@ class AuboSimulator:
             site_id = self.data.site("ee_site")
             return self.data.site_xpos[site_id].copy()
         except Exception:
-            # Fall back to wrist3 body position
+            # Fall back to wrist3 body position (URDF uses wrist3_Link)
             try:
-                body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "wrist3_link")
+                body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "wrist3_Link")
                 if body_id >= 0:
                     return self.data.xpos[body_id].copy()
             except Exception:
@@ -263,9 +301,9 @@ class AuboSimulator:
             rot_mat = self.data.site_xmat[site_id].reshape(3, 3)
             return self._rotation_matrix_to_quaternion(rot_mat)
         except Exception:
-            # Fall back to wrist3 body orientation
+            # Fall back to wrist3 body orientation (URDF uses wrist3_Link)
             try:
-                body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "wrist3_link")
+                body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "wrist3_Link")
                 if body_id >= 0:
                     rot_mat = self.data.xmat[body_id].reshape(3, 3)
                     return self._rotation_matrix_to_quaternion(rot_mat)
@@ -316,31 +354,111 @@ class AuboSimulator:
             self.viewer.close()
             self.viewer = None
 
-    def render_image(self, width: int = 640, height: int = 480) -> bytes:
+    def render_image(
+        self,
+        width: int = 640,
+        height: int = 480,
+        azimuth: float = 0,
+        elevation: float = -30,
+        distance: float = 3,
+        lookat: Optional[list] = None,
+    ) -> bytes:
         """
         Render the current state to an image.
 
         Args:
             width: Image width.
             height: Image height.
+            azimuth: Camera azimuth angle in degrees (horizontal rotation).
+            elevation: Camera elevation angle in degrees (vertical rotation).
+            distance: Camera distance to lookat point.
+            lookat: [x, y, z] lookat point.
 
         Returns:
             PNG image bytes.
         """
-        self._prepare_renderer()
-        return self._render_frame(width, height)
+        # Step physics before rendering to advance simulation
+        self.step()
+        return self._render_frame(width, height, azimuth, elevation, distance, lookat)
 
-    def _prepare_renderer(self) -> None:
-        """Prepare the renderer."""
+    def _prepare_renderer(self, render_width: int = 640, render_height: int = 480) -> None:
+        """Prepare the renderer with appropriate dimensions.
+
+        Always uses 640x480 renderer for consistency. The requested dimensions
+        are passed to the render call but the internal renderer stays fixed size
+        to avoid MuJoCo renderer issues with dimension changes.
+        """
         if not hasattr(self, "_renderer"):
-            self._renderer = mujoco.Renderer(self.model, height=self.viewport_height, width=self.viewport_width)
+            self._renderer = mujoco.Renderer(self.model, height=480, width=640)
+            self._render_width = 640
+            self._render_height = 480
 
-    def _render_frame(self, width: int, height: int) -> bytes:
-        """Render a single frame."""
-        self._renderer.update_scene(self.data, "human")
-        img = self._renderer.render(width, height)
-        import cv2
-        return cv2.imencode('.png', img)[1].tobytes()
+    def _render_frame(self, width: int, height: int, azimuth: float = 0, elevation: float = -30, distance: float = 3, lookat: Optional[list] = None) -> bytes:
+        """Render a single frame with specified camera pose."""
+        self._prepare_renderer(width, height)
+
+        # Configure camera pose
+        cam = mujoco.MjvCamera()
+        cam.azimuth = azimuth
+        cam.elevation = elevation
+        cam.distance = distance
+        if lookat:
+            cam.lookat = lookat
+        else:
+            # Default lookat at robot base
+            cam.lookat = [0, 0, 0.3]
+
+        # Configure scene for better visibility
+        scene_option = mujoco.MjvOption()
+        scene_option.frame = mujoco.mjtFrame.mjFRAME_WORLD  # Show world frame
+
+        # Note: scene.xml already defines proper lighting, don't override
+        self._renderer.update_scene(self.data, cam, scene_option)
+        img = self._renderer.render()
+        # Return raw RGB bytes - frontend will handle display via canvas
+        return img.tobytes()
+
+    def _configure_lighting(self) -> None:
+        """Configure scene lighting for better visibility.
+
+        Note: The scene.xml already defines lights (headlight, directional light),
+        but we enhance visibility by configuring light properties.
+        """
+        if not hasattr(self, '_lights_configured'):
+            # Enable and configure the lights defined in the model
+            for i in range(min(3, self.model.nlight)):
+                self.model.light_active[i] = 1
+                # Position lights around the robot
+                if i == 0:
+                    self.model.light_pos[i] = [2, 2, 3]  # Main light upper right
+                    self.model.light_dir[i] = [-0.5, -0.5, -1]
+                elif i == 1:
+                    self.model.light_pos[i] = [-2, 1, 2]  # Fill light left
+                    self.model.light_dir[i] = [0.5, -0.3, -0.8]
+                elif i == 2:
+                    self.model.light_pos[i] = [0, -2, 1]  # Bottom fill
+                    self.model.light_dir[i] = [0, 0.8, -0.5]
+                self.model.light_specular[i] = 0.3
+                self.model.light_ambient[i] = 0.4
+                self.model.light_diffuse[i] = 0.5
+            self._lights_configured = True
+
+    def _fix_table_collision(self) -> None:
+        """
+        Fix table collision in the scene.
+
+        The scene.xml defines tables with collision disabled (contype=0, conaffinity=0).
+        This method enables collision on existing table geoms so objects can rest on them.
+        """
+        table_names = ["table1", "table2"]
+        for name in table_names:
+            geom_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, name)
+            if geom_id >= 0:
+                self.model.geom_contype[geom_id] = 1
+                self.model.geom_conaffinity[geom_id] = 1
+                print(f"Enabled collision on {name} (geom_id={geom_id})")
+            else:
+                print(f"Warning: Could not find geom {name}")
 
     def get_observation(self) -> dict:
         """

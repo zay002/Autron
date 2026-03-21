@@ -36,5 +36,8 @@ Thumbs.db
 # Mujoco
 .mujoco/
 
+# External robot models (not to be uploaded)
+manipulator_grasp/
+
 # Config with credentials
 backend/src/robot_controller/config.json

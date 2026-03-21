@@ -56,7 +56,7 @@ class SimulatorConfig:
 class AppConfig:
     """Application-wide configuration."""
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_port: int = 12450
     cors_origins: list = field(default_factory=lambda: ["*"])
     log_level: str = "INFO"
     robot: RobotConfig = field(default_factory=RobotConfig)
@@ -87,7 +87,7 @@ def load_config() -> AppConfig:
                 data = json.load(f)
             _config = AppConfig(
                 api_host=data.get("api_host", "0.0.0.0"),
-                api_port=data.get("api_port", 8000),
+                api_port=data.get("api_port", 12450),
                 log_level=data.get("log_level", "INFO"),
                 robot=RobotConfig(**data.get("robot", {})),
                 camera=CameraConfig(**data.get("camera", {})),

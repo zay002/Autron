@@ -17,10 +17,10 @@ function App() {
       })
       .catch(() => setBackendConnected(false))
 
-    // Poll for robot state
+    // Poll for robot state at lower rate (1 second)
     const interval = setInterval(() => {
       getState()
-    }, 100)
+    }, 1000)
 
     return () => clearInterval(interval)
   }, [getState])

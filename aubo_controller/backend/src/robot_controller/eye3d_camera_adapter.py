@@ -101,6 +101,7 @@ class Eye3DCameraAdapter(CameraAdapter):
 
     def _ensure_sdk_initialized(self) -> bool:
         """Initialize SDK if not already done."""
+        # If SDK not initialized at all, load DLL and initialize
         if not Eye3DCameraAdapter._sdk_initialized:
             try:
                 if self._dll_path:
@@ -116,13 +117,17 @@ class Eye3DCameraAdapter(CameraAdapter):
                     return False
 
                 Eye3DCameraAdapter._sdk_initialized = True
+                Eye3DCameraAdapter._sdk_refcount = 1
+                return True
             except OSError as e:
                 print(f"Failed to load Eye3DViewer_API.dll: {e}")
                 self._camera = None
                 return False
-
-        Eye3DCameraAdapter._sdk_refcount += 1
-        return True
+        else:
+            # SDK already initialized, just increment refcount
+            Eye3DCameraAdapter._sdk_refcount += 1
+            # Re-use the already-loaded DLL handle for this instance
+            return True
 
     def _cleanup_sdk(self):
         """Decrement SDK reference count and uninit if zero."""
@@ -130,8 +135,8 @@ class Eye3DCameraAdapter(CameraAdapter):
         if Eye3DCameraAdapter._sdk_refcount <= 0:
             if self._camera:
                 self._camera.Uninit()
-                Eye3DCameraAdapter._sdk_initialized = False
-                self._sdk_refcount = 0
+            Eye3DCameraAdapter._sdk_initialized = False
+            Eye3DCameraAdapter._sdk_refcount = 0
 
     def connect(self) -> bool:
         """Connect to the Eye 3D camera device."""
